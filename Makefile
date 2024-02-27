@@ -1,0 +1,2 @@
+deploy :; source .env && forge script script/DeployPiggyBank.s.sol:PiggyBankDeployScript --rpc-url $${RPC_URL}  --private-key $${PRIVATE_KEY} --broadcast
+echidna-test :; echidna ./test/echinda/Fuzz.sol --contract Fuzz  --config echidna-config.yaml
