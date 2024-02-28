@@ -77,7 +77,7 @@ This flow is like "Pay gas only” with the addition of (7.) and (8.). Here, the
 
 
 ## Developing 
-After you clone the repo, you can run the tests using Forge, from [Foundry](https://github.com/foundry-rs/foundry?tab=readme-ov-file)
+After cloning the repo, run the tests using Forge, from [Foundry](https://github.com/foundry-rs/foundry?tab=readme-ov-file)
 ```bash
 forge test
 ```
