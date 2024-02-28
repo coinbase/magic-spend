@@ -18,9 +18,9 @@ struct WithdrawRequest {
 Where signature is an [EIP-191](https://eips.ethereum.org/EIPS/eip-191) compliant signature of the message 
 ```solidity
 abi.encode(
-  <Magic Spend Contract Address>,
-  <Account>,
-  <Chain ID>,
+  <Magic Spend contract address>,
+  <msg.sender of the withdraw transaction>,
+  <chain ID>,
   withdrawRequest.asset,
   withdrawRequest.amount,
   withdrawRequest.nonce,
