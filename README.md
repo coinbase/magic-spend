@@ -19,7 +19,7 @@ Where signature is an [EIP-191](https://eips.ethereum.org/EIPS/eip-191) complian
 ```solidity
 abi.encode(
   <Magic Spend contract address>,
-  <msg.sender of the withdraw transaction>,
+  <UserOperation.sender and/or msg.sender of the withdraw call>,
   <chain ID>,
   withdrawRequest.asset,
   withdrawRequest.amount,
@@ -35,7 +35,7 @@ This contract is part of a broader Magic Spend product from Coinbase, which as a
 <img width="661" alt="Diagram of Coinbase user making use of Magic Spend" src="https://github.com/coinbase/magic-spend/assets/6678357/42d3a8fc-a376-4139-9ea9-040cf094d74b">
 
 ## Detailed Flows 
-When the withdrawing account is an ERC-4337 compliant smart contract (like [Coinbase Smart Wallet](https://github.com/coinbase/smart-wallet)), there are three different ways the Magic Spend smart contract can be used
+When the withdrawing account is an ERC-4337 compliant smart contract (like [Smart Wallet](https://github.com/coinbase/smart-wallet)), there are three different ways the Magic Spend smart contract can be used
 1. Pay gas only
 2. Transfer funds during execution only
 3. Pay gas and transfer funds during execution
