@@ -34,6 +34,9 @@ This contract is part of a broader Magic Spend product from Coinbase, which as a
 
 <img width="661" alt="Diagram of Coinbase user making use of Magic Spend" src="https://github.com/coinbase/magic-spend/assets/6678357/42d3a8fc-a376-4139-9ea9-040cf094d74b">
 
+
+We have started a [discussion](https://ethereum-magicians.org/t/proposed-json-rpc-method-wallet-getassetbalance/) around a possible new wallet RPC to enable apps to have better awareness of this "just in time" funding. 
+
 ## Detailed Flows 
 When the withdrawing account is an ERC-4337 compliant smart contract (like [Smart Wallet](https://github.com/coinbase/smart-wallet)), there are three different ways the Magic Spend smart contract can be used
 1. Pay gas only
