@@ -11,7 +11,6 @@ contract Fuzz is FuzzHelper {
     constructor() payable FuzzHelper() {}
 
     /// @dev Deposit some eth amount on the `sut` contract.
-    ///      NOTE: Deposited amount is clamped to not exceed `PAYMASTER_MAX_BALANCE`.
     /// @dev Inputs control:
     ///         - 0 <= amount <= (PAYMASTER_MAX_BALANCE - sut.balance)
     /// @dev Assertions:
