@@ -154,10 +154,10 @@ contract Fuzz is FuzzHelper {
         uint256 paymasterBalAfterPostOp = address(sut).balance;
         uint256 userBalAfterPostOp = address(WITHDRAWER).balance;
 
-        // NOTE: The balance decrease on the `sut` (Paymaster) is not simplly `amount` as the `actualGasCost`
-        //       is already be deposited on the Entrypoint (thus the subscration).
-        // NOTE: If the userOp call succeeds the `postOp()` callback automatically returns the remaining excess
-        //       (maxCost - actualGasCost) balance to the user account.
+        // NOTE: The balance decrease on the `sut` (Paymaster) is not simply `amount` as the `actualGasCost`
+        //       is already deposited on the Entrypoint (thus the subscration).
+        // NOTE: If the userOp call succeeds the `postOp()` callback automatically returns the remaining gas
+        //       excess (maxCost - actualGasCost) to the user account.
         uint256 withdrawFromPaymaster = amount - actualGasCost;
 
         // Assert overall the `sut` balance has been decreased as excpected.
