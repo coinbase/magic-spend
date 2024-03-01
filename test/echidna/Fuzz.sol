@@ -1,185 +1,179 @@
 // SPDX-License-Identifier: MIT
 pragma solidity ^0.8.0;
 
-import "./FuzzSetup.sol";
-
 import {SafeTransferLib} from "solady/src/utils/SafeTransferLib.sol";
 import {IPaymaster} from "account-abstraction/interfaces/IPaymaster.sol";
 
-contract Fuzz is FuzzSetup {
-    // TODO: better account management
-    address withdrawer = address(0xb0b);
+import {MagicSpend} from "../../src/MagicSpend.sol";
+import {FuzzHelper} from "./FuzzHelper.sol";
 
-    constructor() payable FuzzSetup() {}
+contract Fuzz is FuzzHelper {
+    constructor() payable FuzzHelper() {}
 
-    function validatePaymasterUserOp(uint256 amount, uint256 maxGasCost) internal returns (bytes memory, uint256) {
-        uint256 nonce = nonces[withdrawer]++;
-        uint48 expiry = uint48(block.timestamp + 1 days);
+    /// @dev Deposit some eth amount on the `sut` contract.
+    ///      NOTE: Deposited amount is clamped to not exceed `PAYMASTER_MAX_BALANCE`.
+    /// @dev Inputs control:
+    ///         - 0 <= amount <= (PAYMASTER_MAX_BALANCE - sut.balance)
+    /// @dev Assertions:
+    ///         - ETH transfer MUST NOT fail
+    /// @dev Ghost variables:
+    ///         - `totalDeposited` is increased by the deposited amount
+    function depositPaymasterBalance(uint256 amount) public {
+        amount = clampBetween(amount, 0, PAYMASTER_MAX_BALANCE - address(sut).balance);
 
-        uint256 max = address(magic).balance * 10; // some arbitrary number thats larger than the balance
-        amount = clampBetween(amount, 0, max);
-        maxGasCost = clampBetween(maxGasCost, 0, amount);
+        (bool success,) = address(sut).call{value: amount}("");
+        assert(success);
 
-        MagicSpend.WithdrawRequest memory request = _getWithdrawRequest(
-            withdrawer,
-            address(0x0), // use ETH
-            amount,
-            nonce,
-            expiry
-        );
-
-        UserOperation memory userOp = _getUserOp(withdrawer, request);
-
-        vm.prank(magic.entryPoint());
-        try magic.validatePaymasterUserOp(
-            userOp,
-            sha256("ignored"), // userOp hash is ignored
-            maxGasCost
-        ) returns (bytes memory context, uint256 validationData) {
-            log("validatePaymasterUserOp: success");
-
-            return (context, validationData);
-        } catch {
-            log("validatePaymasterUserOp: failed");
-            assert(false);
-        }
+        totalDeposited += amount;
     }
 
-    function postOp(uint8 mode, uint256 maxGasCost, uint256 actualGasCost) internal {
-        IPaymaster.PostOpMode mode = IPaymaster.PostOpMode(clampBetween(mode, 0, 2));
-        uint256 max = address(magic).balance * 10; // some arbitrary number thats larger than the balance
-        maxGasCost = clampBetween(maxGasCost, 0, max);
-        actualGasCost = clampBetween(actualGasCost, 0, maxGasCost);
-
-        vm.prank(magic.entryPoint());
-        try magic.postOp(mode, abi.encode(maxGasCost, withdrawer), actualGasCost) {
-            log("postOp: success");
-        } catch (bytes memory returnData) {
-            bytes4 errorSelector = bytes4(returnData);
-
-            if (errorSelector == SafeTransferLib.ETHTransferFailed.selector) {
-                // ignore eth transfer failed errors
-            } else {
-                log("postOp: failed");
-                assert(false);
-            }
-        }
-    }
-
+    /// @dev Wrapper around a `_withdrawGasExcess()` with {withdrawer: WITHDRAWER, failOnNoExcess: false} as param.
+    /// @dev Assertions:
+    ///      - see `_withdrawGasExcess()` assertions.
     function withdrawGasExcess() public {
-        _withdrawGasExcess(withdrawer, false);
+        _withdrawGasExcess({withdrawer: WITHDRAWER, failOnNoExcess: false});
     }
 
-    function _withdrawGasExcess(address _withdrawer, bool failOnNoExcess) internal {
-        vm.prank(_withdrawer);
-        try magic.withdrawGasExcess() {
-            log("withdrawGasExcess: success");
-        } catch (bytes memory returnData) {
-            bytes4 errorSelector = bytes4(returnData);
-
-            if (errorSelector == MagicSpend.NoExcess.selector) {
-                if (failOnNoExcess) {
-                    log("withdrawGasExcess: failed (no excess)");
-                    assert(false);
-                }
-            } else if (errorSelector == SafeTransferLib.ETHTransferFailed.selector) {
-                // ignore eth transfer failed errors
-            } else {
-                log("withdrawGasExcess: failed");
-                assert(false);
-            }
-        }
-    }
-
-    function simulateUserOp(uint256 amount, uint256 maxGasCost, uint256 actualGasCost, bool withdrawExcess) public {
-        // todo: generic clamping helpers
-        // warning: these clampings need to be identical to the ones in the validatePaymasterUserOp and postOp functions
-        amount = clampBetween(amount, 0, address(magic).balance * 10);
-        maxGasCost = clampBetween(maxGasCost, 0, amount);
-        actualGasCost = clampBetween(actualGasCost, 0, maxGasCost);
-
-        uint256 excess = amount - maxGasCost;
-
-        uint256 paymasterBalBefore = address(magic).balance;
-        uint256 userBalBefore = address(withdrawer).balance;
-
-        (bytes memory context, uint256 validationData) = validatePaymasterUserOp(amount, maxGasCost);
-
-        uint256 paymasterBalAfterValidation = address(magic).balance;
-        uint256 userBalAfterValidation = address(withdrawer).balance;
-
-        if (withdrawExcess) {
-            _withdrawGasExcess(withdrawer, excess != 0);
-        }
-
-        uint256 paymasterBalAfterWithdraw = address(magic).balance;
-        uint256 userBalAfterWithdraw = address(withdrawer).balance;
-
-        // todo: fuzz modes
-        postOp(0, maxGasCost, actualGasCost);
-
-        uint256 paymasterBalAfterPostOp = address(magic).balance;
-        uint256 userBalAfterPostOp = address(withdrawer).balance;
-
-        log("paymasterBalBefore", paymasterBalBefore);
-        log("paymasterBalAfterValidation", paymasterBalAfterValidation);
-        log("paymasterBalAfterWithdraw", paymasterBalAfterWithdraw);
-        log("paymasterBalAfterPostOp", paymasterBalAfterPostOp);
-        log("userBalBefore", userBalBefore);
-        log("userBalAfterValidation", userBalAfterValidation);
-        log("userBalAfterWithdraw", userBalAfterWithdraw);
-        log("userBalAfterPostOp", userBalAfterPostOp);
-
-        assert(paymasterBalAfterValidation == paymasterBalBefore);
-        if (withdrawExcess) {
-            assert(paymasterBalAfterWithdraw == paymasterBalAfterValidation - excess);
-        } else {
-            assert(paymasterBalAfterWithdraw == paymasterBalAfterValidation);
-        }
-        assert(paymasterBalAfterPostOp == paymasterBalBefore - amount + actualGasCost);
-
-        assert(userBalAfterValidation == userBalBefore);
-        if (withdrawExcess) {
-            assert(userBalAfterWithdraw == userBalBefore + excess);
-        } else {
-            assert(userBalAfterWithdraw == userBalBefore);
-        }
-        assert(userBalAfterPostOp == userBalBefore + amount - actualGasCost);
-
-        totalWithdrawn += amount - actualGasCost;
-    }
-
+    /// @dev Wrapper around `sut.withdraw()` to assert upon its correct behavior.
+    /// @dev Inputs control:
+    ///         - 0 <= amount <= PAYMASTER_MAX_BALANCE
+    ///         - block.timestamp <= expiry <= type(uint48).max
+    /// @dev Assertions:
+    ///         - [on success]:
+    ///             - `withdrawer` balance after withdraw MUST have increased by withdrawn amount
+    ///         - [on revert]:
+    ///             - revert case MUST be `SafeTransferLib.ETHTransferFailed`
+    /// @dev Ghost variables:
+    ///         - `totalWithdrawn` is increased by the withdrawn amount
     function withdraw(uint256 amount, uint48 expiry) public {
-        uint256 nonce = nonces[withdrawer]++;
-        amount = clampBetween(amount, 0, address(magic).balance);
+        amount = clampBetween(amount, 0, PAYMASTER_MAX_BALANCE);
         expiry = uint48(clampBetween(expiry, uint48(block.timestamp), type(uint48).max));
 
-        MagicSpend.WithdrawRequest memory request = _getWithdrawRequest(
-            withdrawer,
-            address(0x0), // use ETH
-            amount,
-            nonce,
-            expiry
-        );
+        uint256 nonce = nonces[WITHDRAWER]++;
 
-        uint256 withdrawerBalanceBefore = withdrawer.balance;
+        MagicSpend.WithdrawRequest memory request = _getWithdrawRequest({
+            withdrawer: WITHDRAWER,
+            asset: address(0x0), // use ETH
+            amount: amount,
+            nonce: nonce,
+            expiry: expiry
+        });
 
-        vm.prank(withdrawer);
-        try magic.withdraw(request) {
-            assert(withdrawer.balance == withdrawerBalanceBefore + amount);
+        uint256 withdrawerBalanceBefore = WITHDRAWER.balance;
+
+        vm.prank(WITHDRAWER);
+        try sut.withdraw(request) {
+            // Assert the `withdrawer` balance after withdraw has increased by withdrawn amount.
+            assert(WITHDRAWER.balance == withdrawerBalanceBefore + amount);
 
             totalWithdrawn += amount;
-        } catch {
-            assert(false);
+        } catch (bytes memory returnData) {
+            bytes4 errorSelector = bytes4(returnData);
+
+            // Assert that the only accepted revert case is `SafeTransferLib.ETHTransferFailed`.
+            assert(errorSelector == SafeTransferLib.ETHTransferFailed.selector);
         }
     }
 
-    function echinda_invariantTotalWithdrawn() public {
-        uint256 paymasterBalance = address(magic).balance;
+    /// @dev Simulate the Entrypoint executing a `UserOperation` by:
+    ///         - calling `_validatePaymasterUserOp()` on the `sut`
+    ///         - [OPTIONAL] calling `_withdrawGasExcess()` to simulate the userOp using the `sut` funds not only for gas
+    ///         - calling `_postOp()` on the `sut`
+    ///         - [OPTIONAL] re-calling `_postOp()` on the `sut`
+    /// @dev Assertions:
+    ///         - see `_validatePaymasterUserOp()` assertions
+    ///         - `sut` and user account balances MUST NOT change in between the `_validatePaymasterUserOp()` call
+    ///         - see `_withdrawGasExcess()` assertions
+    ///         - `sut` (resp. user account) balance MUST decrease (resp. increase) by the excess withdrawn amount (if any)
+    ///         - see `_postOp()` assertions
+    ///         - `_postOp()` MUST NOT revert twice in a row
+    ///         - [on second `_postOp()`] the user account gas excess balance MUST have been incremented by the unused gas
+    ///         - Overall the `sut` balance MUST have been correctly decreased
+    ///         - Overall the user account balance MUST have been correctly increased
+    /// @dev Ghost variables:
+    ///         - `totalWithdrawn` is increased by the computed withdrawn amount
+    function simulateUserOp(uint256 amount, uint256 maxGasCost, uint256 actualGasCost, bool withdrawExcess) public {
+        (amount, maxGasCost, actualGasCost) =
+            _genericClampings({amount: amount, maxGasCost: maxGasCost, actualGasCost: actualGasCost});
 
-        log("paymasterBalance", paymasterBalance);
-        log("totalWithdrawn", totalWithdrawn);
+        uint256 excess = amount - maxGasCost;
+        uint256 paymasterBalBefore = address(sut).balance;
+        uint256 userBalBefore = address(WITHDRAWER).balance;
 
-        assert(paymasterBalance == PAYMASTER_STARTING_BALANCE - totalWithdrawn);
+        // User op validation phase.
+        (bytes memory context,) = _validatePaymasterUserOp({amount: amount, maxGasCost: maxGasCost});
+        // Assert calling `_validatePaymasterUserOp()` has no effect on the `sut` and user account balances.
+        uint256 paymasterBalAfterValidation = address(sut).balance;
+        uint256 userBalAfterValidation = address(WITHDRAWER).balance;
+
+        assert(paymasterBalAfterValidation == paymasterBalBefore);
+        assert(userBalAfterValidation == userBalBefore);
+
+        // User op execution phase.
+        if (withdrawExcess) {
+            _withdrawGasExcess({withdrawer: WITHDRAWER, failOnNoExcess: excess != 0});
+        }
+        uint256 paymasterBalAfterWithdraw = address(sut).balance;
+        uint256 userBalAfterWithdraw = address(WITHDRAWER).balance;
+
+        // Assert the `sut` (resp. user account) balance has been decreased (resp. increased) by the withdrawn amount (if any).
+        // NOTE: New block to avoid stack too deep error.
+        {
+            uint256 withdrawExesss = withdrawExcess ? excess : 0;
+            assert(paymasterBalAfterWithdraw == paymasterBalAfterValidation - withdrawExesss);
+            assert(userBalAfterWithdraw == userBalBefore + withdrawExesss);
+        }
+
+        // Post user op execution phase.
+        {
+            uint256 gasExcessBalanceBefore = sut.gasExcessBalance(WITHDRAWER);
+
+            bool success = _postOp({
+                mode: IPaymaster.PostOpMode.opSucceeded,
+                maxGasCost: maxGasCost,
+                actualGasCost: actualGasCost,
+                context: context
+            });
+
+            if (!success) {
+                success = _postOp({
+                    mode: IPaymaster.PostOpMode.postOpReverted,
+                    maxGasCost: maxGasCost,
+                    actualGasCost: actualGasCost,
+                    context: context
+                });
+
+                // Assert `_postOp()` MUST NOT revert twice in a row.
+                assert(success);
+
+                // Assert the `sut` gas excess balance associated with the user account has been incremented by the unused gas.
+                (uint256 withheld,) = abi.decode(context, (uint256, address));
+                assert(sut.gasExcessBalance(WITHDRAWER) == gasExcessBalanceBefore + withheld - actualGasCost);
+            }
+        }
+
+        uint256 paymasterBalAfterPostOp = address(sut).balance;
+        uint256 userBalAfterPostOp = address(WITHDRAWER).balance;
+
+        // NOTE: The balance decrease on the `sut` (Paymaster) is not simplly `amount` as the `actualGasCost`
+        //       is already be deposited on the Entrypoint (thus the subscration).
+        // NOTE: If the userOp call succeeds the `postOp()` callback automatically returns the remaining excess
+        //       (maxCost - actualGasCost) balance to the user account.
+        uint256 withdrawFromPaymaster = amount - actualGasCost;
+
+        // Assert overall the `sut` balance has been decreased as excpected.
+        assert(paymasterBalAfterPostOp == paymasterBalBefore - withdrawFromPaymaster);
+
+        // Assert overall the user account balance has been increased as excpected.
+        assert(userBalAfterPostOp == userBalBefore + withdrawFromPaymaster);
+
+        totalWithdrawn += withdrawFromPaymaster;
+    }
+
+    /// @dev Ensure the `sut` balance always macthes with the `totalDeposited` and `totalWithdrawn` trackers.
+    /// @dev Assertions:
+    ///         - `sut` balance must always be equal to `totalDeposited - totalWithdrawn`
+    function accountingInvariant() public view {
+        assert(address(sut).balance == totalDeposited - totalWithdrawn);
     }
 }
