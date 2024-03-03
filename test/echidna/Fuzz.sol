@@ -112,6 +112,7 @@ contract Fuzz is FuzzHelper {
         if (withdrawExcess) {
             _withdrawGasExcess({withdrawer: WITHDRAWER, failOnNoExcess: excess != 0});
         }
+
         uint256 paymasterBalAfterWithdraw = address(sut).balance;
         uint256 userBalAfterWithdraw = address(WITHDRAWER).balance;
 

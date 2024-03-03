@@ -100,7 +100,7 @@ contract FuzzHelper is FuzzSetup {
     ///             - `withdrawer` balance after withdraw MUST have increased by withdrawn amount
     ///             - `sut` gas excess balance for `withdrawer` MUST have been reset to 0
     ///         - [on revert]:
-    ///             - [if failOnNoExcess] revert case  MUST NOT be`MagicSpend.NoExcess`
+    ///             - [if failOnNoExcess] revert case  MUST NOT be `MagicSpend.NoExcess`
     ///             - [else] revert case MUST be `SafeTransferLib.ETHTransferFailed`
     function _withdrawGasExcess(address withdrawer, bool failOnNoExcess) internal {
         uint256 balanceBefore = address(withdrawer).balance;
