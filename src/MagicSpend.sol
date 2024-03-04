@@ -152,7 +152,7 @@ contract MagicSpend is Ownable, IPaymaster {
     }
 
     /// @notice Returns whether the withdrawRequest signature is valid for the given account
-    /// @dev Does not validate nonce or expiry 
+    /// @dev Does not validate nonce or expiry
     function isValidWithdrawSignature(address account, WithdrawRequest memory withdrawRequest)
         public
         view
