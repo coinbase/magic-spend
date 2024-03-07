@@ -19,7 +19,7 @@ contract MagicSpend is Ownable, IPaymaster {
     }
 
     mapping(address => uint256) public gasExcessBalance;
-    mapping(uint256 => mapping(address => bool)) internal _nonceUsed;
+    mapping(address => mapping(uint256 => uint256)) internal _nonceBitMap;
 
     event MagicSpendWithdrawal(address indexed account, address indexed asset, uint256 amount, uint256 nonce);
 
@@ -180,7 +180,8 @@ contract MagicSpend is Ownable, IPaymaster {
 
     /// @notice Returns whether the nonce has been used for the given account
     function nonceUsed(address account, uint256 nonce) external view returns (bool) {
-        return _nonceUsed[nonce][account];
+        (, uint256 bits, uint256 mask) = _parseNonce(account, nonce);
+        return bits & mask != 0;
     }
 
     /// @dev Returns the canonical ERC4337 EntryPoint contract.
@@ -192,14 +193,13 @@ contract MagicSpend is Ownable, IPaymaster {
         return SignatureCheckerLib.toEthSignedMessageHash(message);
     }
 
-    /// @dev runs all non-signature validation checks
+    /// @dev Runs all non-signature validation checks
     /// signature validation done separately so we can not revert in validatePaymasterUserOp
     function _validateRequest(address account, WithdrawRequest memory withdrawRequest) internal {
-        if (_nonceUsed[withdrawRequest.nonce][account]) {
-            revert InvalidNonce(withdrawRequest.nonce);
-        }
+        (uint256 bucket, uint256 bits, uint256 mask) = _parseNonce(account, withdrawRequest.nonce);
+        if (bits & mask != 0) revert InvalidNonce(withdrawRequest.nonce);
 
-        _nonceUsed[withdrawRequest.nonce][account] = true;
+        _nonceBitMap[account][bucket] = bits | mask;
 
         // This is emitted ahead of fund transfer, but allows a consolidated code path
         emit MagicSpendWithdrawal(account, withdrawRequest.asset, withdrawRequest.amount, withdrawRequest.nonce);
@@ -211,5 +211,16 @@ contract MagicSpend is Ownable, IPaymaster {
         } else {
             SafeTransferLib.safeTransfer(asset, to, amount);
         }
+    }
+
+    /// @dev Split a nonce into `bucket`, `bits`, and `mask` for efficient storage and verification.
+    function _parseNonce(address account, uint256 nonce)
+        private
+        view
+        returns (uint256 bucket, uint256 bits, uint256 mask)
+    {
+        bucket = nonce >> 8;
+        bits = _nonceBitMap[account][bucket];
+        mask = 1 << (nonce & 0xff);
     }
 }
