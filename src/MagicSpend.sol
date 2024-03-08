@@ -6,7 +6,6 @@ import {SignatureCheckerLib} from "solady/src/utils/SignatureCheckerLib.sol";
 import {SafeTransferLib} from "solady/src/utils/SafeTransferLib.sol";
 import {UserOperation} from "account-abstraction/interfaces/UserOperation.sol";
 import {IPaymaster} from "account-abstraction/interfaces/IPaymaster.sol";
-import {Strings} from "openzeppelin-contracts/contracts/utils/Strings.sol";
 import {IEntryPoint} from "account-abstraction/interfaces/IEntryPoint.sol";
 
 contract MagicSpend is Ownable, IPaymaster {
