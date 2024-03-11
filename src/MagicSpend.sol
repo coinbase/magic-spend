@@ -44,7 +44,7 @@ contract MagicSpend is Ownable, IPaymaster {
     /// @param nonce The request nonce.
     event MagicSpendWithdrawal(address indexed account, address indexed asset, uint256 amount, uint256 nonce);
 
-    /// @notice Reverted when the withdraw request signature is invalid.
+    /// @notice Thrown when the withdraw request signature is invalid.
     ///
     /// @dev The withdraw request signature MUST be:
     ///         - an ECDSA signature following EIP-191 (version 0x45)
@@ -52,27 +52,27 @@ contract MagicSpend is Ownable, IPaymaster {
     ///         - signed by the current owner of this contract
     error InvalidSignature();
 
-    /// @notice Reverted when trying to use a withdraw request after its expiry has been reched.
+    /// @notice Thrown when trying to use a withdraw request after its expiry has been reched.
     error Expired();
 
-    /// @notice Reverted when trying to replay a withdraw request with the same nonce.
+    /// @notice Thrown when trying to replay a withdraw request with the same nonce.
     ///
     /// @param nonce The already used nonce.
     error InvalidNonce(uint256 nonce);
 
-    /// @notice Reverted during validation in the context of ERC4337, when the withraw reques amount is insufficient
+    /// @notice Thrown during validation in the context of ERC4337, when the withraw reques amount is insufficient
     ///         to sponsor the transaction gas.
     ///
     /// @param requested The withdraw request amount.
     /// @param maxCost The max gas cost required by the Entrypoint.
     error RequestLessThanGasMaxCost(uint256 requested, uint256 maxCost);
 
-    /// @notice Reverted when the withdraw request asset is not ETH (zero address).
+    /// @notice Thrown when the withdraw request asset is not ETH (zero address).
     ///
     /// @param asset The requested asset.
     error UnsupportedPaymasterAsset(address asset);
 
-    /// @notice Reverted when trying to withdraw funds but nothing is available.
+    /// @notice Thrown when trying to withdraw funds but nothing is available.
     error NoExcess();
 
     /// @dev Requires that the caller is the EntryPoint.
