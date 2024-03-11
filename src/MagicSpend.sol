@@ -10,7 +10,7 @@ import {IEntryPoint} from "account-abstraction/interfaces/IEntryPoint.sol";
 
 /// @title Magic Spend
 ///
-/// @author Coinbase (https://github.com/coinbase/smart-wallet)
+/// @author Coinbase (https://github.com/coinbase/magic-spend)
 ///
 /// @notice ERC4337 Paymaster implementation compatible with Entrypoint v0.6.
 ///
