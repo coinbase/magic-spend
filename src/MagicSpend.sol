@@ -8,6 +8,8 @@ import {UserOperation} from "account-abstraction/interfaces/UserOperation.sol";
 import {IPaymaster} from "account-abstraction/interfaces/IPaymaster.sol";
 import {IEntryPoint} from "account-abstraction/interfaces/IEntryPoint.sol";
 
+import "forge-std/console.sol";
+
 /// @title Magic Spend
 ///
 /// @author Coinbase (https://github.com/coinbase/magic-spend)
@@ -75,9 +77,9 @@ contract MagicSpend is Ownable, IPaymaster {
     /// @notice Thrown during `UserOperation` validation when the current balance is insufficient to cover the
     ///         requested amount (exluding the `maxGasCost` set by the Entrypoint).
     ///
-    /// @param nonGasFunds The requested amount excluding gas.
-    /// @param balance     The current contract balance.
-    error InsufficientBalance(uint256 nonGasFunds, uint256 balance);
+    /// @param requestedAmount The requested amount excluding gas.
+    /// @param balance         The current contract balance.
+    error InsufficientBalance(uint256 requestedAmount, uint256 balance);
 
     /// @notice Thrown when trying to withdraw funds but nothing is available.
     error NoExcess();
@@ -112,9 +114,10 @@ contract MagicSpend is Ownable, IPaymaster {
         returns (bytes memory context, uint256 validationData)
     {
         WithdrawRequest memory withdrawRequest = abi.decode(userOp.paymasterAndData[20:], (WithdrawRequest));
+        uint256 withdrawAmount = withdrawRequest.amount;
 
-        if (withdrawRequest.amount < maxCost) {
-            revert RequestLessThanGasMaxCost(withdrawRequest.amount, maxCost);
+        if (withdrawAmount < maxCost) {
+            revert RequestLessThanGasMaxCost(withdrawAmount, maxCost);
         }
 
         if (withdrawRequest.asset != address(0)) {
@@ -126,15 +129,15 @@ contract MagicSpend is Ownable, IPaymaster {
         bool sigFailed = !isValidWithdrawSignature(userOp.sender, withdrawRequest);
         validationData = (sigFailed ? 1 : 0) | (uint256(withdrawRequest.expiry) << 160);
 
-        // Ensure at validation that the contract has enough balance to cover the "non-gas" requested funds.
+        // Ensure at validation that the contract has enough balance to cover the requested funds.
         // NOTE: This check is necessary to enforce that the contract will be able to transfer the remaining funds
         //       when `postOp()` is called back after the `UserOperation` has been executed.
-        uint256 nonGasFunds = withdrawRequest.amount - maxCost;
-        if (nonGasFunds > address(this).balance) {
-            revert InsufficientBalance(nonGasFunds, address(this).balance);
+        if (address(this).balance < withdrawAmount) {
+            revert InsufficientBalance(withdrawAmount, address(this).balance);
         }
 
-        withdrawableFunds[userOp.sender] += nonGasFunds;
+        // NOTE: Do not include the gas part in withdrawable funds as it will be handled in `postOp()`.
+        withdrawableFunds[userOp.sender] += withdrawAmount - maxCost;
         context = abi.encode(maxCost, userOp.sender);
     }
 
@@ -148,14 +151,9 @@ contract MagicSpend is Ownable, IPaymaster {
 
         (uint256 maxGasCost, address account) = abi.decode(context, (uint256, address));
 
-        // Withdraw the gas difference from the Entrypoint.
-        uint256 gasDiff = maxGasCost - actualGasCost;
-        if (gasDiff > 0) {
-            IEntryPoint(entryPoint()).withdrawTo(payable(address(this)), gasDiff);
-        }
-
         // Compute the total remaining funds available for the user accout.
-        uint256 withdrawable = withdrawableFunds[account] + gasDiff;
+        // NOTE: Take into account the user operation gas that was not consummed.
+        uint256 withdrawable = withdrawableFunds[account] + (maxGasCost - actualGasCost);
 
         // Send the all remaining funds to the user accout.
         delete withdrawableFunds[account];
