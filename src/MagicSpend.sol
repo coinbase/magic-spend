@@ -100,16 +100,16 @@ contract MagicSpend is Ownable, IPaymaster {
         WithdrawRequest memory withdrawRequest = abi.decode(userOp.paymasterAndData[20:], (WithdrawRequest));
 
         if (withdrawRequest.amount < maxCost) {
-            revert RequestLessThanGasMaxCost({requested: withdrawRequest.amount, maxCost: maxCost});
+            revert RequestLessThanGasMaxCost(withdrawRequest.amount, maxCost);
         }
 
         if (withdrawRequest.asset != address(0)) {
             revert UnsupportedPaymasterAsset(withdrawRequest.asset);
         }
 
-        _validateRequest({account: userOp.sender, withdrawRequest: withdrawRequest});
+        _validateRequest(userOp.sender, withdrawRequest);
 
-        bool sigFailed = !isValidWithdrawSignature({account: userOp.sender, withdrawRequest: withdrawRequest});
+        bool sigFailed = !isValidWithdrawSignature(userOp.sender, withdrawRequest);
         validationData = (sigFailed ? 1 : 0) | (uint256(withdrawRequest.expiry) << 160);
 
         uint256 excess = withdrawRequest.amount - maxCost;
@@ -137,7 +137,7 @@ contract MagicSpend is Ownable, IPaymaster {
         delete withdrawableFunds[account];
 
         if (excess > 0) {
-            _withdraw({asset: address(0), to: account, amount: excess});
+            _withdraw(address(0), account, excess);
         }
     }
 
@@ -148,21 +148,19 @@ contract MagicSpend is Ownable, IPaymaster {
     function withdrawGasExcess() external {
         uint256 amount = withdrawableFunds[msg.sender];
         // we could allow 0 value transfers, but prefer to be explicit
-        if (amount == 0) {
-            revert NoExcess();
-        }
+        if (amount == 0) revert NoExcess();
 
         delete withdrawableFunds[msg.sender];
-        _withdraw({asset: address(0), to: msg.sender, amount: amount});
+        _withdraw(address(0), msg.sender, amount);
     }
 
     /// @notice Allows caller to withdraw funds by calling with a valid `withdrawRequest`
     ///
     /// @param withdrawRequest The withdraw request.
     function withdraw(WithdrawRequest memory withdrawRequest) external {
-        _validateRequest({account: msg.sender, withdrawRequest: withdrawRequest});
+        _validateRequest(msg.sender, withdrawRequest);
 
-        if (!isValidWithdrawSignature({account: msg.sender, withdrawRequest: withdrawRequest})) {
+        if (!isValidWithdrawSignature(msg.sender, withdrawRequest)) {
             revert InvalidSignature();
         }
 
@@ -171,7 +169,7 @@ contract MagicSpend is Ownable, IPaymaster {
         }
 
         // reserve funds for gas, will credit user with difference in post op
-        _withdraw({asset: withdrawRequest.asset, to: msg.sender, amount: withdrawRequest.amount});
+        _withdraw(withdrawRequest.asset, msg.sender, withdrawRequest.amount);
     }
 
     /// @notice Withdraws funds from this contract.
@@ -182,7 +180,7 @@ contract MagicSpend is Ownable, IPaymaster {
     /// @param to The beneficiary address.
     /// @param amount The amount to withdraw.
     function ownerWithdraw(address asset, address to, uint256 amount) external onlyOwner {
-        _withdraw({asset: asset, to: to, amount: amount});
+        _withdraw(asset, to, amount);
     }
 
     /// @notice Deposits ETH from this contract funds into the EntryPoint.
@@ -191,7 +189,7 @@ contract MagicSpend is Ownable, IPaymaster {
     ///
     /// @param amount The amount to deposit on the the Entrypoint.
     function entryPointDeposit(uint256 amount) external payable onlyOwner {
-        SafeTransferLib.safeTransferETH({to: entryPoint(), amount: amount});
+        SafeTransferLib.safeTransferETH(entryPoint(), amount);
     }
 
     /// @notice Withdraws ETH from the EntryPoint.
@@ -201,7 +199,7 @@ contract MagicSpend is Ownable, IPaymaster {
     /// @param to The beneficiary address.
     /// @param amount The amount to withdraw from the Entrypoint.
     function entryPointWithdraw(address payable to, uint256 amount) external onlyOwner {
-        IEntryPoint(entryPoint()).withdrawTo({withdrawAddress: to, withdrawAmount: amount});
+        IEntryPoint(entryPoint()).withdrawTo(to, amount);
     }
 
     /// @notice Adds stake to the EntryPoint.
@@ -243,11 +241,9 @@ contract MagicSpend is Ownable, IPaymaster {
         view
         returns (bool)
     {
-        return SignatureCheckerLib.isValidSignatureNow({
-            signer: owner(),
-            hash: getHash(account, withdrawRequest),
-            signature: withdrawRequest.signature
-        });
+        return SignatureCheckerLib.isValidSignatureNow(
+            owner(), getHash(account, withdrawRequest), withdrawRequest.signature
+        );
     }
 
     /// @notice Returns the hash to be signed for a given `account` and `withdrawRequest` pair.
@@ -303,12 +299,7 @@ contract MagicSpend is Ownable, IPaymaster {
         _nonceUsed[withdrawRequest.nonce][account] = true;
 
         // This is emitted ahead of fund transfer, but allows a consolidated code path
-        emit MagicSpendWithdrawal({
-            account: account,
-            asset: withdrawRequest.asset,
-            amount: withdrawRequest.amount,
-            nonce: withdrawRequest.nonce
-        });
+        emit MagicSpendWithdrawal(account, withdrawRequest.asset, withdrawRequest.amount, withdrawRequest.nonce);
     }
 
     /// @notice Withdraws funds from this contract.
@@ -321,9 +312,9 @@ contract MagicSpend is Ownable, IPaymaster {
     /// @param amount The amount to withdraw.
     function _withdraw(address asset, address to, uint256 amount) internal {
         if (asset == address(0)) {
-            SafeTransferLib.safeTransferETH({to: to, amount: amount});
+            SafeTransferLib.safeTransferETH(to, amount);
         } else {
-            SafeTransferLib.safeTransfer({token: asset, to: to, amount: amount});
+            SafeTransferLib.safeTransfer(asset, to, amount);
         }
     }
 }
