@@ -41,7 +41,7 @@ contract PostOpTest is PaymasterMagicSpendBaseTest {
         magic.postOp(IPaymaster.PostOpMode.postOpReverted, context, actualCost);
         uint256 expectedBalance = amount - actualCost;
         assertEq(withdrawer.balance, 0);
-        assertEq(magic.gasExcessBalance(withdrawer), expectedBalance);
+        assertEq(magic.withdrawableFunds(withdrawer), expectedBalance);
         vm.stopPrank();
         vm.deal(address(magic), expectedBalance);
         if (expectedBalance > 0) {
