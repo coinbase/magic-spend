@@ -75,6 +75,13 @@ contract MagicSpend is Ownable, IPaymaster {
     /// @notice Thrown when trying to withdraw funds but nothing is available.
     error NoExcess();
 
+    /// @notice Thrown in when `postOp()` is called a second time with `PostOpMode.postOpReverted`.
+    ///
+    /// @dev This should only really occur if for unknown reasons the transfer of the withdrwable
+    ///      funds to the user account failed (i.e. this contract's ETH balance is insufficient or
+    ///      the user account refused the funds or ran out of gas on receive).
+    error UnexpectedPostOpRevertedMode();
+
     /// @dev Requires that the caller is the EntryPoint.
     modifier onlyEntryPoint() virtual {
         if (msg.sender != entryPoint()) revert Unauthorized();
@@ -123,21 +130,20 @@ contract MagicSpend is Ownable, IPaymaster {
         external
         onlyEntryPoint
     {
-        (uint256 withheld, address account) = abi.decode(context, (uint256, address));
-
+        // If `postOp` is called back after a first fail then revert entire `UserOperation`.
         if (mode == IPaymaster.PostOpMode.postOpReverted) {
-            // we failed to payout the excess, save it so the user can call withdrawGasExcess later
-            withdrawableFunds[account] += (withheld - actualGasCost);
-            return;
+            revert UnexpectedPostOpRevertedMode();
         }
 
-        // credit user difference between actual and withheld
+        (uint256 maxCost, address account) = abi.decode(context, (uint256, address));
+
+        // credit user difference between actual and maxCost
         // and unwithdrawn excess
-        uint256 excess = withdrawableFunds[account] + (withheld - actualGasCost);
+        uint256 withdrawable = withdrawableFunds[account] + (maxCost - actualGasCost);
         delete withdrawableFunds[account];
 
-        if (excess > 0) {
-            _withdraw(address(0), account, excess);
+        if (withdrawable > 0) {
+            SafeTransferLib.forceSafeTransferETH(account, withdrawable, SafeTransferLib.GAS_STIPEND_NO_STORAGE_WRITES);
         }
     }
 
