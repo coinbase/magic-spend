@@ -158,7 +158,7 @@ contract MagicSpend is Ownable, IPaymaster {
         // Send the all remaining funds to the user accout.
         delete withdrawableFunds[account];
         if (withdrawable > 0) {
-            SafeTransferLib.forceSafeTransferETH(account, withdrawable, gasleft());
+            SafeTransferLib.forceSafeTransferETH(account, withdrawable, SafeTransferLib.GAS_STIPEND_NO_STORAGE_WRITES);
         }
     }
 
