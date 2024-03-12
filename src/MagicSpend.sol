@@ -78,8 +78,8 @@ contract MagicSpend is Ownable, IPaymaster {
     /// @notice Thrown in when `postOp()` is called a second time with `PostOpMode.postOpReverted`.
     ///
     /// @dev This should only really occur if for unknown reasons the transfer of the withdrwable
-    ///      funds to the user account failed (i.e., the paymaster balance is insufficient or, the
-    ///      user account refused the funds or ran out of gas on receive).
+    ///      funds to the user account failed (i.e. this contract's ETH balance is insufficient or
+    ///      the user account refused the funds or ran out of gas on receive).
     error UnexpectedPostOpRevertedMode();
 
     /// @dev Requires that the caller is the EntryPoint.
