@@ -145,7 +145,7 @@ contract MagicSpend is Ownable, IPaymaster {
         onlyEntryPoint
     {
         // `PostOpMode.postOpReverted` should be impossible.
-        // Only possible cause would be if this contract does not enough ETH to transfer
+        // Only possible cause would be if this contract does not own enough ETH to transfer
         // but this is checked at the validation step.
         assert(mode != PostOpMode.postOpReverted);
 
@@ -228,7 +228,7 @@ contract MagicSpend is Ownable, IPaymaster {
     /// @dev Reverts if not called by the owner of the contract.
     ///
     /// @param amount              The amount to stake in the Entrypoint.
-    /// @param unstakeDelaySeconds XXX
+    /// @param unstakeDelaySeconds The duration for which the stake cannot be withdrawn.
     function entryPointAddStake(uint256 amount, uint32 unstakeDelaySeconds) external payable onlyOwner {
         IEntryPoint(entryPoint()).addStake{value: amount}(unstakeDelaySeconds);
     }
