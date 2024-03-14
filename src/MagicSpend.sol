@@ -8,8 +8,6 @@ import {UserOperation} from "account-abstraction/interfaces/UserOperation.sol";
 import {IPaymaster} from "account-abstraction/interfaces/IPaymaster.sol";
 import {IEntryPoint} from "account-abstraction/interfaces/IEntryPoint.sol";
 
-import "forge-std/console.sol";
-
 /// @title Magic Spend
 ///
 /// @author Coinbase (https://github.com/coinbase/magic-spend)
@@ -147,6 +145,8 @@ contract MagicSpend is Ownable, IPaymaster {
         onlyEntryPoint
     {
         // `PostOpMode.postOpReverted` should be impossible.
+        // Only possible cause would be if this contract does not enough ETH to transfer
+        // but this is checked at the validation step.
         assert(mode != PostOpMode.postOpReverted);
 
         (uint256 maxGasCost, address account) = abi.decode(context, (uint256, address));
