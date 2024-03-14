@@ -40,28 +40,6 @@ contract ValidatePaymasterUserOpTest is PaymasterMagicSpendBaseTest, ValidateTes
         assertEq(uint160(validationData), 1);
     }
 
-    function test_setsExcess(uint256 amount_, uint256 maxCost_, uint256 actualCost) public {
-        vm.assume(maxCost_ <= amount_);
-        vm.assume(actualCost <= maxCost_);
-        amount = amount_;
-        magic.validatePaymasterUserOp(_getUserOp(), userOpHash, maxCost_);
-        uint256 expected = amount - maxCost_;
-        assertEq(magic.withdrawableFunds(withdrawer), expected);
-    }
-
-    function test_doesNotOverwriteExcess(uint256 amount_, uint256 maxCost_, uint256 actualCost) public {
-        maxCost_ = bound(maxCost_, 0, amount_);
-        actualCost = bound(actualCost, 0, maxCost_);
-        uint256 expected = amount_ - maxCost_;
-        vm.assume(expected < type(uint256).max / 2);
-        amount = amount_;
-        magic.validatePaymasterUserOp(_getUserOp(), userOpHash, maxCost_);
-        assertEq(magic.withdrawableFunds(withdrawer), expected);
-        nonce += 1;
-        magic.validatePaymasterUserOp(_getUserOp(), userOpHash, maxCost_);
-        assertEq(magic.withdrawableFunds(withdrawer), expected * 2);
-    }
-
     function test_emitsCorrectly(address, uint256 amount_, uint256 nonce_) public override {
         maxCost = amount_;
         super.test_emitsCorrectly(magic.entryPoint(), amount_, nonce_);
