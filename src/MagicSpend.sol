@@ -30,8 +30,8 @@ contract MagicSpend is Ownable, IPaymaster {
         uint48 expiry;
     }
 
-    /// @notice Track the funds available to be withdrawn per user.
-    mapping(address user => uint256 amount) public withdrawableFunds;
+    /// @notice Track the ETH available to be withdrawn per user.
+    mapping(address user => uint256 amount) internal _withdrawableETH;
 
     /// @dev Mappings keeping track of already used nonces per user to prevent replays of withdraw requests.
     mapping(uint256 nonce => mapping(address user => bool used)) internal _nonceUsed;
@@ -135,7 +135,7 @@ contract MagicSpend is Ownable, IPaymaster {
         }
 
         // NOTE: Do not include the gas part in withdrawable funds as it will be handled in `postOp()`.
-        withdrawableFunds[userOp.sender] += withdrawAmount - maxCost;
+        _withdrawableETH[userOp.sender] += withdrawAmount - maxCost;
         context = abi.encode(maxCost, userOp.sender);
     }
 
@@ -153,10 +153,10 @@ contract MagicSpend is Ownable, IPaymaster {
 
         // Compute the total remaining funds available for the user accout.
         // NOTE: Take into account the user operation gas that was not consummed.
-        uint256 withdrawable = withdrawableFunds[account] + (maxGasCost - actualGasCost);
+        uint256 withdrawable = _withdrawableETH[account] + (maxGasCost - actualGasCost);
 
         // Send the all remaining funds to the user accout.
-        delete withdrawableFunds[account];
+        delete _withdrawableETH[account];
         if (withdrawable > 0) {
             SafeTransferLib.forceSafeTransferETH(account, withdrawable, SafeTransferLib.GAS_STIPEND_NO_STORAGE_WRITES);
         }
@@ -167,11 +167,11 @@ contract MagicSpend is Ownable, IPaymaster {
     /// @dev Can be called back during the `UserOperation` execution to sponsor funds for non-gas related
     ///      use cases (e.g., swap or mint).
     function withdrawGasExcess() external {
-        uint256 amount = withdrawableFunds[msg.sender];
+        uint256 amount = _withdrawableETH[msg.sender];
         // we could allow 0 value transfers, but prefer to be explicit
         if (amount == 0) revert NoExcess();
 
-        delete withdrawableFunds[msg.sender];
+        delete _withdrawableETH[msg.sender];
         _withdraw(address(0), msg.sender, amount);
     }
 
