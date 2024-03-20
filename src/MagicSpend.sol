@@ -52,7 +52,7 @@ contract MagicSpend is Ownable, IPaymaster {
     ///         - signed by the current owner of this contract
     error InvalidSignature();
 
-    /// @notice Thrown when trying to use a withdraw request after its expiry has been reched.
+    /// @notice Thrown when trying to use a withdraw request after its expiry has been reached.
     error Expired();
 
     /// @notice Thrown when trying to replay a withdraw request with the same nonce.
@@ -60,7 +60,7 @@ contract MagicSpend is Ownable, IPaymaster {
     /// @param nonce The already used nonce.
     error InvalidNonce(uint256 nonce);
 
-    /// @notice Thrown during validation in the context of ERC4337, when the withraw reques amount is insufficient
+    /// @notice Thrown during validation in the context of ERC4337, when the withdraw request amount is insufficient
     ///         to sponsor the transaction gas.
     ///
     /// @param requested The withdraw request amount.
@@ -84,7 +84,7 @@ contract MagicSpend is Ownable, IPaymaster {
 
     /// @notice Thrown in when `postOp()` is called a second time with `PostOpMode.postOpReverted`.
     ///
-    /// @dev This should only really occur if for unknown reasons the transfer of the withdrwable
+    /// @dev This should only really occur if for unknown reasons the transfer of the withdrawable
     ///      funds to the user account failed (i.e. this contract's ETH balance is insufficient or
     ///      the user account refused the funds or ran out of gas on receive).
     error UnexpectedPostOpRevertedMode();
@@ -152,7 +152,7 @@ contract MagicSpend is Ownable, IPaymaster {
         (uint256 maxGasCost, address account) = abi.decode(context, (uint256, address));
 
         // Compute the total remaining funds available for the user accout.
-        // NOTE: Take into account the user operation gas that was not consummed.
+        // NOTE: Take into account the user operation gas that was not consumed.
         uint256 withdrawable = _withdrawableETH[account] + (maxGasCost - actualGasCost);
 
         // Send the all remaining funds to the user accout.
