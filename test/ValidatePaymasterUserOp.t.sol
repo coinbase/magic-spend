@@ -16,6 +16,12 @@ contract ValidatePaymasterUserOpTest is PaymasterMagicSpendBaseTest, ValidateTes
         magic.validatePaymasterUserOp(_getUserOp(), userOpHash, maxCost);
     }
 
+    function test_revertsIfWithdrawalExceedsBalance() public {
+        vm.deal(address(magic), 0);
+        vm.expectRevert(abi.encodeWithSelector(MagicSpend.InsufficientBalance.selector, amount, 0));
+        magic.validatePaymasterUserOp(_getUserOp(), userOpHash, maxCost);
+    }
+
     function test_returnsCorrectly() public {
         (bytes memory context, uint256 validationData) =
             magic.validatePaymasterUserOp(_getUserOp(), userOpHash, maxCost);
