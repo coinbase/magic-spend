@@ -14,13 +14,7 @@ contract GetHashTest is MagicSpendTest {
         MagicSpend.WithdrawRequest memory request = _getRequest();
         bytes32 expectedHash = SignatureCheckerLib.toEthSignedMessageHash(
             abi.encode(
-                address(magic),
-                withdrawer,
-                block.chainid,
-                address(token),
-                request.amount,
-                request.nonce,
-                request.expiry
+                address(magic), withdrawer, block.chainid, address(token), request.amount, request.nonce, request.expiry
             )
         );
         bytes32 testHash = magic.getHash(withdrawer, request);
