@@ -11,7 +11,6 @@ contract IsValidWithdrawalSignature is MagicSpendTest {
     function test_returnsTrueWithValidSignature() public {
         asset = address(token);
         MagicSpend.WithdrawRequest memory request = _getRequest();
-        // bytes32 hash = magic.getHash(withdrawer, request);
         bool success = magic.isValidWithdrawSignature(withdrawer, request);
         assert(success);
     }
@@ -20,7 +19,6 @@ contract IsValidWithdrawalSignature is MagicSpendTest {
         asset = address(token);
         address invalidSender = address(0xdead);
         MagicSpend.WithdrawRequest memory request = _getRequest();
-        // bytes32 hash = magic.getHash(withdrawer, request);
         bool success = magic.isValidWithdrawSignature(invalidSender, request);
         assertFalse(success);
     }
