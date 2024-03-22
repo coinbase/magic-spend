@@ -21,7 +21,7 @@ contract MagicSpend is Ownable, IPaymaster {
     struct WithdrawRequest {
         /// @dev The signature associated with this withdraw request.
         bytes signature;
-        /// @dev The asset to withdraw. NOTE: Only ETH (associated with zero address) is supported for now.
+        /// @dev The asset to withdraw.
         address asset;
         /// @dev The requested amount to withdraw.
         uint256 amount;
