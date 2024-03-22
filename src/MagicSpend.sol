@@ -13,6 +13,7 @@ import {IEntryPoint} from "account-abstraction/interfaces/IEntryPoint.sol";
 /// @author Coinbase (https://github.com/coinbase/magic-spend)
 ///
 /// @notice ERC4337 Paymaster implementation compatible with Entrypoint v0.6.
+/// See https://github.com/eth-infinitism/account-abstraction/tree/releases/v0.6
 ///
 /// @dev See https://eips.ethereum.org/EIPS/eip-4337#extension-paymasters.
 contract MagicSpend is Ownable, IPaymaster {
@@ -57,7 +58,7 @@ contract MagicSpend is Ownable, IPaymaster {
 
     /// @notice Thrown when trying to replay a withdraw request with the same nonce.
     ///
-    /// @param nonce The already used nonce.
+    /// @param nonce The nonce being replayed.
     error InvalidNonce(uint256 nonce);
 
     /// @notice Thrown during validation in the context of ERC4337, when the withdraw request amount is insufficient
@@ -67,7 +68,7 @@ contract MagicSpend is Ownable, IPaymaster {
     /// @param maxCost   The max gas cost required by the Entrypoint.
     error RequestLessThanGasMaxCost(uint256 requested, uint256 maxCost);
 
-    /// @notice Thrown when the withdraw request asset is not ETH (zero address).
+    /// @notice Thrown when the withdraw request `asset` is not ETH (zero address).
     ///
     /// @param asset The requested asset.
     error UnsupportedPaymasterAsset(address asset);
@@ -82,9 +83,9 @@ contract MagicSpend is Ownable, IPaymaster {
     /// @notice Thrown when trying to withdraw funds but nothing is available.
     error NoExcess();
 
-    /// @notice Thrown in when `postOp()` is called a second time with `PostOpMode.postOpReverted`.
+    /// @notice Thrown when `postOp()` is called a second time with `PostOpMode.postOpReverted`.
     ///
-    /// @dev This should only really occur if for unknown reasons the transfer of the withdrawable
+    /// @dev This should only really occur if, for unknown reasons, the transfer of the withdrawable
     ///      funds to the user account failed (i.e. this contract's ETH balance is insufficient or
     ///      the user account refused the funds or ran out of gas on receive).
     error UnexpectedPostOpRevertedMode();
@@ -162,7 +163,7 @@ contract MagicSpend is Ownable, IPaymaster {
         }
     }
 
-    /// @notice Allows the sender to withdraw any available funds associated with him.
+    /// @notice Allows the sender to withdraw any available funds associated with their account.
     ///
     /// @dev Can be called back during the `UserOperation` execution to sponsor funds for non-gas related
     ///      use cases (e.g., swap or mint).
@@ -175,7 +176,7 @@ contract MagicSpend is Ownable, IPaymaster {
         _withdraw(address(0), msg.sender, amount);
     }
 
-    /// @notice Allows caller to withdraw funds by calling with a valid `withdrawRequest`
+    /// @notice Allows the caller to withdraw funds by calling with a valid `withdrawRequest`.
     ///
     /// @param withdrawRequest The withdraw request.
     function withdraw(WithdrawRequest memory withdrawRequest) external {
@@ -197,14 +198,14 @@ contract MagicSpend is Ownable, IPaymaster {
     ///
     /// @dev Reverts if not called by the owner of the contract.
     ///
-    /// @param asset The asset to withdraw.
-    /// @param to The beneficiary address.
+    /// @param asset  The asset to withdraw.
+    /// @param to     The beneficiary address.
     /// @param amount The amount to withdraw.
     function ownerWithdraw(address asset, address to, uint256 amount) external onlyOwner {
         _withdraw(asset, to, amount);
     }
 
-    /// @notice Deposits ETH from this contract funds into the EntryPoint.
+    /// @notice Transfers ETH from this contract into the EntryPoint.
     ///
     /// @dev Reverts if not called by the owner of the contract.
     ///
@@ -225,10 +226,12 @@ contract MagicSpend is Ownable, IPaymaster {
 
     /// @notice Adds stake to the EntryPoint.
     ///
-    /// @dev Reverts if not called by the owner of the contract.
+    /// @dev Reverts if not called by the owner of the contract. Calling this while an unstake
+    ///      is pending will first cancel the pending unstake.
     ///
     /// @param amount              The amount to stake in the Entrypoint.
-    /// @param unstakeDelaySeconds The duration for which the stake cannot be withdrawn.
+    /// @param unstakeDelaySeconds The duration for which the stake cannot be withdrawn. Must be
+    ///                            equal to or greater than the current unstake delay.
     function entryPointAddStake(uint256 amount, uint32 unstakeDelaySeconds) external payable onlyOwner {
         IEntryPoint(entryPoint()).addStake{value: amount}(unstakeDelaySeconds);
     }
@@ -242,7 +245,8 @@ contract MagicSpend is Ownable, IPaymaster {
 
     /// @notice Withdraws stake from the EntryPoint.
     ///
-    /// @dev Reverts if not called by the owner of the contract.
+    /// @dev Reverts if not called by the owner of the contract. Only call this after the unstake delay
+    ///      has passed since the last `entryPointUnlockStake` call.
     ///
     /// @param to The beneficiary address.
     function entryPointWithdrawStake(address payable to) external onlyOwner {
