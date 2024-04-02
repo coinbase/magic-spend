@@ -160,7 +160,9 @@ contract MagicSpend is Ownable, IPaymaster {
         // `PostOpMode.postOpReverted` should be impossible.
         // Only possible cause would be if this contract does not own enough ETH to transfer
         // but this is checked at the validation step.
-        assert(mode != PostOpMode.postOpReverted);
+        if (mode == PostOpMode.postOpReverted) {
+            revert UnexpectedPostOpRevertedMode();
+        }
 
         (uint256 maxGasCost, address account) = abi.decode(context, (uint256, address));
 

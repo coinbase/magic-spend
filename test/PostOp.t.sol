@@ -40,7 +40,7 @@ contract PostOpTest is PaymasterMagicSpendBaseTest {
 
         (bytes memory context,) = magic.validatePaymasterUserOp(_getUserOp(), userOpHash, maxCost_);
 
-        vm.expectRevert();
+        vm.expectRevert(MagicSpend.UnexpectedPostOpRevertedMode.selector);
         magic.postOp(IPaymaster.PostOpMode.postOpReverted, context, actualCost);
 
         uint256 expectedBalance = 0;
