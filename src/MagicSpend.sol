@@ -128,20 +128,19 @@ contract MagicSpend is Ownable, IPaymaster {
             revert UnsupportedPaymasterAsset(withdrawRequest.asset);
         }
 
-        _validateRequest(userOp.sender, withdrawRequest);
-
-        bool sigFailed = !isValidWithdrawSignature(userOp.sender, withdrawRequest);
-        validationData = (sigFailed ? 1 : 0) | (uint256(withdrawRequest.expiry) << 160);
-
         // Ensure at validation that the contract has enough balance to cover the requested funds.
         // NOTE: This check is necessary to enforce that the contract will be able to transfer the remaining funds
         //       when `postOp()` is called back after the `UserOperation` has been executed.
         uint256 newPendingWithdrawals = _pendingWithdrawals + withdrawAmount;
-
         if ((newPendingWithdrawals - 1) > address(this).balance) {
             uint256 availableBalance = address(this).balance - (_pendingWithdrawals - 1);
             revert InsufficientAvailableBalance(withdrawAmount, availableBalance);
         }
+
+        _validateRequest(userOp.sender, withdrawRequest);
+
+        bool sigFailed = !isValidWithdrawSignature(userOp.sender, withdrawRequest);
+        validationData = (sigFailed ? 1 : 0) | (uint256(withdrawRequest.expiry) << 160);
 
         // Register the new pending withdrawals.
         _pendingWithdrawals = newPendingWithdrawals;
