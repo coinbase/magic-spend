@@ -147,7 +147,10 @@ contract MagicSpend is Ownable, IPaymaster {
 
         // NOTE: Do not include the gas part in withdrawable funds because it is considered already consumed at this point.
         //      `postOp()` will refund the amout of gas that was not consumed.
-        _withdrawableETH[userOp.sender] += withdrawAmount - maxCost;
+        uint256 nonGasAmount = withdrawAmount - maxCost;
+        if (nonGasAmount > 0) {
+            _withdrawableETH[userOp.sender] += nonGasAmount;
+        }
         context = abi.encode(maxCost, userOp.sender);
     }
 
