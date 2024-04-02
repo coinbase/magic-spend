@@ -18,20 +18,29 @@ contract ValidatePaymasterUserOpTest is PaymasterMagicSpendBaseTest, ValidateTes
 
     function test_revertsInsufficientAvailableBalance(
         uint256 initialBalance,
-        uint256 pendingWithdrawals,
-        uint256 withdrawAmount
+        uint256 firstWithdrawAmount,
+        uint256 excessAmount
     ) public {
-        initialBalance = bound(initialBalance, 0, type(uint128).max - 2);
-        pendingWithdrawals = bound(pendingWithdrawals, 0, initialBalance);
-        uint256 availableBalance = initialBalance - pendingWithdrawals;
-        withdrawAmount = bound(withdrawAmount, availableBalance + 1, type(uint128).max - 1);
+        initialBalance = bound(initialBalance, 0, type(uint128).max);
+        excessAmount = bound(excessAmount, 1, type(uint128).max);
 
-        maxCost = withdrawAmount;
-        amount = withdrawAmount;
+        firstWithdrawAmount = bound(firstWithdrawAmount, 0, initialBalance);
+        uint256 availableBalance = initialBalance - firstWithdrawAmount;
+        uint256 secondWithdrawAmount = availableBalance + excessAmount;
 
         vm.deal(address(magic), initialBalance);
-        vm.store(address(magic), bytes32(uint256(0)), bytes32(pendingWithdrawals + 1));
 
+        // 1st validation call to increase the `_pendingWithdrawals` traker.
+        amount = firstWithdrawAmount;
+        maxCost = amount;
+        magic.validatePaymasterUserOp(_getUserOp(), userOpHash, maxCost);
+
+        nonce += 1;
+        amount = secondWithdrawAmount;
+        maxCost = amount;
+
+        // 2nd validation call is expected to revert as `secondWithdrawAmount` is above the MagicSpend `availableBalance`
+        // by the fuzzed `excessAmount`.
         vm.expectRevert(
             abi.encodeWithSelector(MagicSpend.InsufficientAvailableBalance.selector, amount, availableBalance)
         );
