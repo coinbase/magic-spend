@@ -30,6 +30,9 @@ contract MagicSpend is Ownable, IPaymaster {
         uint48 expiry;
     }
 
+    /// @notice Track the pending ETH withdrwals.
+    uint256 internal _pendingWithdrawals;
+
     /// @notice Track the ETH available to be withdrawn per user.
     mapping(address user => uint256 amount) internal _withdrawableETH;
 
@@ -75,9 +78,9 @@ contract MagicSpend is Ownable, IPaymaster {
     /// @notice Thrown during `UserOperation` validation when the current balance is insufficient to cover the
     ///         requested amount (exluding the `maxGasCost` set by the Entrypoint).
     ///
-    /// @param requestedAmount The requested amount excluding gas.
-    /// @param balance         The current contract balance.
-    error InsufficientBalance(uint256 requestedAmount, uint256 balance);
+    /// @param requestedAmount  The requested amount excluding gas.
+    /// @param availableBalance The current contract balance.
+    error InsufficientAvailableBalance(uint256 requestedAmount, uint256 availableBalance);
 
     /// @notice Thrown when trying to withdraw funds but nothing is available.
     error NoExcess();
@@ -100,6 +103,9 @@ contract MagicSpend is Ownable, IPaymaster {
     /// @param _owner The initial owner of this contract.
     constructor(address _owner) {
         Ownable._initializeOwner(_owner);
+
+        // Initialize it to 1 to save gas and avoid resetting it to 0.
+        _pendingWithdrawals = 1;
     }
 
     /// @notice Receive function allowing ETH to be deposited in this contract.
@@ -130,11 +136,18 @@ contract MagicSpend is Ownable, IPaymaster {
         // Ensure at validation that the contract has enough balance to cover the requested funds.
         // NOTE: This check is necessary to enforce that the contract will be able to transfer the remaining funds
         //       when `postOp()` is called back after the `UserOperation` has been executed.
-        if (address(this).balance < withdrawAmount) {
-            revert InsufficientBalance(withdrawAmount, address(this).balance);
+        uint256 newPendingWithdrawals = _pendingWithdrawals + withdrawAmount;
+
+        if ((newPendingWithdrawals - 1) > address(this).balance) {
+            uint256 availableBalance = address(this).balance - (_pendingWithdrawals - 1);
+            revert InsufficientAvailableBalance(withdrawAmount, availableBalance);
         }
 
-        // NOTE: Do not include the gas part in withdrawable funds as it will be handled in `postOp()`.
+        // Register the new pending withdrawals.
+        _pendingWithdrawals = newPendingWithdrawals;
+
+        // NOTE: Do not include the gas part in withdrawable funds because it is considered already consumed at this point.
+        //      `postOp()` will refund the amout of gas that was not consumed.
         _withdrawableETH[userOp.sender] += withdrawAmount - maxCost;
         context = abi.encode(maxCost, userOp.sender);
     }
@@ -151,14 +164,21 @@ contract MagicSpend is Ownable, IPaymaster {
 
         (uint256 maxGasCost, address account) = abi.decode(context, (uint256, address));
 
-        // Compute the total remaining funds available for the user accout.
-        // NOTE: Take into account the user operation gas that was not consumed.
-        uint256 withdrawable = _withdrawableETH[account] + (maxGasCost - actualGasCost);
+        // Compute the total remaining funds the user can withdraw.
+        // NOTE: Take into account the gas consumed cost.
+        uint256 withdrawableAfterGasRefund = _withdrawableETH[account] + (maxGasCost - actualGasCost);
+
+        // Update storage.
+        if (_pendingWithdrawals > 1) {
+            _pendingWithdrawals = 1;
+        }
+        delete _withdrawableETH[account];
 
         // Send the all remaining funds to the user accout.
-        delete _withdrawableETH[account];
-        if (withdrawable > 0) {
-            SafeTransferLib.forceSafeTransferETH(account, withdrawable, SafeTransferLib.GAS_STIPEND_NO_STORAGE_WRITES);
+        if (withdrawableAfterGasRefund > 0) {
+            SafeTransferLib.forceSafeTransferETH(
+                account, withdrawableAfterGasRefund, SafeTransferLib.GAS_STIPEND_NO_STORAGE_WRITES
+            );
         }
     }
 

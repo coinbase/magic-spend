@@ -10,9 +10,12 @@ contract WithdrawGasExcess is PaymasterMagicSpendBaseTest {
     }
 
     function test_transferExcess(uint256 amount_, uint256 maxCost_, uint256 actual) public {
-        vm.assume(maxCost_ < amount_);
-        vm.assume(actual <= maxCost_);
+        maxCost_ = bound(maxCost_, 0, type(uint256).max - 2);
+        actual = bound(actual, 0, maxCost_);
+        amount_ = bound(amount_, maxCost_ + 1, type(uint256).max - 1);
+
         amount = amount_;
+
         vm.deal(address(magic), amount);
         magic.validatePaymasterUserOp(_getUserOp(), userOpHash, maxCost_);
 
@@ -24,7 +27,9 @@ contract WithdrawGasExcess is PaymasterMagicSpendBaseTest {
     }
 
     function test_RevertsIfNoExcess(uint256 maxCost_) public {
+        maxCost_ = bound(maxCost_, 0, type(uint256).max - 1);
         amount = maxCost_;
+
         vm.deal(address(magic), amount);
         magic.validatePaymasterUserOp(_getUserOp(), userOpHash, maxCost_);
 

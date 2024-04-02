@@ -18,10 +18,12 @@ abstract contract ValidateTest is MagicSpendTest {
         // avoid precompiles
         vm.assume(withdrawer_ > address(0x10000));
         vm.assume(withdrawer_ != address(vm));
+
         asset = address(0);
         withdrawer = withdrawer_;
         amount = amount_;
         nonce = nonce_;
+
         vm.deal(address(magic), amount);
         vm.expectEmit(true, true, true, true);
         emit MagicSpend.MagicSpendWithdrawal(withdrawer, asset, amount, nonce);

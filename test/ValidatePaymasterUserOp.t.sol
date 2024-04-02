@@ -16,9 +16,25 @@ contract ValidatePaymasterUserOpTest is PaymasterMagicSpendBaseTest, ValidateTes
         magic.validatePaymasterUserOp(_getUserOp(), userOpHash, maxCost);
     }
 
-    function test_revertsIfWithdrawalExceedsBalance() public {
-        vm.deal(address(magic), 0);
-        vm.expectRevert(abi.encodeWithSelector(MagicSpend.InsufficientBalance.selector, amount, 0));
+    function test_revertsInsufficientAvailableBalance(
+        uint256 initialBalance,
+        uint256 pendingWithdrawals,
+        uint256 withdrawAmount
+    ) public {
+        initialBalance = bound(initialBalance, 0, type(uint128).max - 2);
+        pendingWithdrawals = bound(pendingWithdrawals, 0, initialBalance);
+        uint256 availableBalance = initialBalance - pendingWithdrawals;
+        withdrawAmount = bound(withdrawAmount, availableBalance + 1, type(uint128).max - 1);
+
+        maxCost = withdrawAmount;
+        amount = withdrawAmount;
+
+        vm.deal(address(magic), initialBalance);
+        vm.store(address(magic), bytes32(uint256(0)), bytes32(pendingWithdrawals + 1));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(MagicSpend.InsufficientAvailableBalance.selector, amount, availableBalance)
+        );
         magic.validatePaymasterUserOp(_getUserOp(), userOpHash, maxCost);
     }
 
@@ -47,6 +63,7 @@ contract ValidatePaymasterUserOpTest is PaymasterMagicSpendBaseTest, ValidateTes
     }
 
     function test_emitsCorrectly(address, uint256 amount_, uint256 nonce_) public override {
+        amount_ = bound(amount_, 0, type(uint256).max - 1);
         maxCost = amount_;
         super.test_emitsCorrectly(magic.entryPoint(), amount_, nonce_);
     }
