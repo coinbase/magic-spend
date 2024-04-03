@@ -10,7 +10,7 @@ contract MagicSpendTest is Test {
     address withdrawer = address(0xb0b);
     uint256 ownerPrivateKey = 0xa11ce;
     address owner = vm.addr(ownerPrivateKey);
-    MagicSpend magic = new MagicSpend(owner);
+    MagicSpend magic = new MagicSpend(owner, 1);
 
     // signature params
     address asset;

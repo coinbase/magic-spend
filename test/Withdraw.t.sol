@@ -11,6 +11,7 @@ contract WithdrawTest is MagicSpendTest, ValidateTest {
     function setUp() public override {
         super.setUp();
         vm.startPrank(withdrawer);
+        invoker = withdrawer;
     }
 
     function test_transfersETHSuccessfully(uint256 amount_) public {

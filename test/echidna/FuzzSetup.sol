@@ -22,7 +22,7 @@ contract FuzzSetup is FuzzBase {
     uint256 totalWithdrawn;
 
     constructor() payable {
-        magic = new MagicSpend(OWNER);
+        magic = new MagicSpend(OWNER, 1);
         address(magic).call{value: PAYMASTER_STARTING_BALANCE}("");
     }
 
