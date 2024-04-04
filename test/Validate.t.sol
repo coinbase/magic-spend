@@ -41,24 +41,22 @@ abstract contract ValidateTest is MagicSpendTest {
     function test_reverts_whenWithdrawExceedsMaxAllowed(
         uint256 accountBalance,
         uint256 withdraw,
-        uint256 maxWithdrawDenominator
+        uint256 maxWithdrawPercent
     ) public virtual {
-        vm.assume(maxWithdrawDenominator > 0);
+        vm.assume(maxWithdrawPercent > 0);
         accountBalance = bound(accountBalance, 0, type(uint256).max - 1);
-        withdraw = bound(withdraw, accountBalance / maxWithdrawDenominator + 1, type(uint256).max);
+        withdraw = bound(withdraw, accountBalance / maxWithdrawPercent + 1, type(uint256).max);
         amount = withdraw;
 
         vm.stopPrank();
         vm.startPrank(owner);
-        magic.setMaxWithdrawDenominator(maxWithdrawDenominator);
+        magic.setMaxWithdrawPercent(maxWithdrawPercent);
         magic.ownerWithdraw(address(0), address(1), address(magic).balance);
         vm.stopPrank();
 
         vm.deal(address(magic), accountBalance);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                MagicSpend.WithdrawTooLarge.selector, withdraw, accountBalance / maxWithdrawDenominator
-            )
+            abi.encodeWithSelector(MagicSpend.WithdrawTooLarge.selector, withdraw, accountBalance / maxWithdrawPercent)
         );
         vm.startPrank(invoker);
         _validateInvokingCall();
