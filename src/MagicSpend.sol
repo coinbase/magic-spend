@@ -192,12 +192,12 @@ contract MagicSpend is Ownable, IPaymaster {
     function withdraw(WithdrawRequest memory withdrawRequest) external {
         _validateRequest(msg.sender, withdrawRequest);
 
-        if (!isValidWithdrawSignature(msg.sender, withdrawRequest)) {
-            revert InvalidSignature();
-        }
-
         if (block.timestamp > withdrawRequest.expiry) {
             revert Expired();
+        }
+
+        if (!isValidWithdrawSignature(msg.sender, withdrawRequest)) {
+            revert InvalidSignature();
         }
 
         // reserve funds for gas, will credit user with difference in post op
