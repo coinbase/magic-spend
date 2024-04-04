@@ -140,7 +140,9 @@ contract MagicSpend is Ownable, IPaymaster {
         validationData = (sigFailed ? 1 : 0) | (uint256(withdrawRequest.expiry) << 160);
 
         // NOTE: Do not include the gas part in withdrawable funds as it will be handled in `postOp()`.
-        _withdrawable[userOp.sender] += withdrawAmount - maxCost;
+        if (withdrawAmount > maxCost) {
+            _withdrawable[userOp.sender] += withdrawAmount - maxCost;
+        }
         context = abi.encode(maxCost, userOp.sender);
     }
 
