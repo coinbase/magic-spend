@@ -8,17 +8,12 @@ contract ValidatePaymasterUserOpTest is PaymasterMagicSpendBaseTest, ValidateTes
     function setUp() public override {
         super.setUp();
         vm.startPrank(magic.entryPoint());
+        invoker = magic.entryPoint();
     }
 
     function test_revertsIfMaxCostMoreThanRequested() public {
         maxCost = amount + 1;
         vm.expectRevert(abi.encodeWithSelector(MagicSpend.RequestLessThanGasMaxCost.selector, amount, maxCost));
-        magic.validatePaymasterUserOp(_getUserOp(), userOpHash, maxCost);
-    }
-
-    function test_revertsIfWithdrawalExceedsBalance() public {
-        vm.deal(address(magic), 0);
-        vm.expectRevert(abi.encodeWithSelector(MagicSpend.InsufficientBalance.selector, amount, 0));
         magic.validatePaymasterUserOp(_getUserOp(), userOpHash, maxCost);
     }
 
@@ -49,6 +44,15 @@ contract ValidatePaymasterUserOpTest is PaymasterMagicSpendBaseTest, ValidateTes
     function test_emitsCorrectly(address, uint256 amount_, uint256 nonce_) public override {
         maxCost = amount_;
         super.test_emitsCorrectly(magic.entryPoint(), amount_, nonce_);
+    }
+
+    function test_reverts_whenWithdrawExceedsMaxAllowed(
+        uint256 accountBalance,
+        uint256 withdraw,
+        uint256 MaxWithdrawDenominator
+    ) public override {
+        maxCost = withdraw;
+        super.test_reverts_whenWithdrawExceedsMaxAllowed(accountBalance, withdraw, MaxWithdrawDenominator);
     }
 
     function _validateInvokingCall() internal override {

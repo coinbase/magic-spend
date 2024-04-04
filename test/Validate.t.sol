@@ -6,6 +6,8 @@ import {Test, console2} from "forge-std/Test.sol";
 import "./MagicSpend.t.sol";
 
 abstract contract ValidateTest is MagicSpendTest {
+    address invoker;
+
     function test_recordsNonceUsed(uint256 nonce_) public {
         nonce = nonce_;
         assertFalse(magic.nonceUsed(withdrawer, nonce));
@@ -33,6 +35,32 @@ abstract contract ValidateTest is MagicSpendTest {
     function test_revertsIfNonceUsed() public {
         _validateInvokingCall();
         vm.expectRevert(abi.encodeWithSelector(MagicSpend.InvalidNonce.selector, nonce));
+        _validateInvokingCall();
+    }
+
+    function test_reverts_whenWithdrawExceedsMaxAllowed(
+        uint256 accountBalance,
+        uint256 withdraw,
+        uint256 maxWithdrawDenominator
+    ) public virtual {
+        vm.assume(maxWithdrawDenominator > 0);
+        accountBalance = bound(accountBalance, 0, type(uint256).max - 1);
+        withdraw = bound(withdraw, accountBalance / maxWithdrawDenominator + 1, type(uint256).max);
+        amount = withdraw;
+
+        vm.stopPrank();
+        vm.startPrank(owner);
+        magic.setMaxWithdrawDenominator(maxWithdrawDenominator);
+        magic.ownerWithdraw(address(0), address(1), address(magic).balance);
+        vm.stopPrank();
+
+        vm.deal(address(magic), accountBalance);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                MagicSpend.WithdrawTooLarge.selector, withdraw, accountBalance / maxWithdrawDenominator
+            )
+        );
+        vm.startPrank(invoker);
         _validateInvokingCall();
     }
 
