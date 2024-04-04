@@ -30,16 +30,14 @@ contract MagicSpend is Ownable, IPaymaster {
         uint48 expiry;
     }
 
-    /// @notice The maximum percentage of address.balance a single withdraw can use.
+    /// @notice address.balance divided by maxWithdrawDenominator expresses the max WithdrawRequest.amount
+    /// allowed for a native asset withdraw.
     ///
-    /// @dev Only applies to native asset withdraws.
     /// @dev Helps prevent withdraws in the same transaction leading to reverts and hurting paymaster reputation.
-    /// @dev Percent expressed in whole units, e.g. 20 means no single withdraw
-    /// can exceed 20% of address.balance
-    uint256 public maxWithdrawPercent;
+    uint256 public maxWithdrawDenominator;
 
-    /// @notice Track the ETH available to be withdrawn per user.
-    mapping(address user => uint256 amount) internal _withdrawableETH;
+    /// @notice Track the amount of native asset available to be withdrawn per user.
+    mapping(address user => uint256 amount) internal _withdrawable;
 
     /// @dev Mappings keeping track of already used nonces per user to prevent replays of withdraw requests.
     mapping(uint256 nonce => mapping(address user => bool used)) internal _nonceUsed;
@@ -52,10 +50,10 @@ contract MagicSpend is Ownable, IPaymaster {
     /// @param nonce   The request nonce.
     event MagicSpendWithdrawal(address indexed account, address indexed asset, uint256 amount, uint256 nonce);
 
-    /// @notice Emitted when the `maxWithdrawPercent` is set.
+    /// @notice Emitted when the `maxWithdrawDenominator` is set.
     ///
-    /// @param newPercent The new maxWithdrawPercent value.
-    event MaxWithdrawPercentSet(uint256 newPercent);
+    /// @param newDenominator The new maxWithdrawDenominator value.
+    event MaxWithdrawDenominatorSet(uint256 newDenominator);
 
     /// @notice Thrown when the withdraw request signature is invalid.
     ///
@@ -85,7 +83,7 @@ contract MagicSpend is Ownable, IPaymaster {
     /// @param asset The requested asset.
     error UnsupportedPaymasterAsset(address asset);
 
-    /// @notice Thrown if WithdrawRequest.amount exceeds address(this).balance / maxWithdrawPercent.
+    /// @notice Thrown if WithdrawRequest.amount exceeds address(this).balance / maxWithdrawDenominator.
     ///
     /// @param requestedAmount The requested amount excluding gas.
     /// @param maxAllowed      The current max allowed withdraw.
@@ -110,9 +108,10 @@ contract MagicSpend is Ownable, IPaymaster {
     /// @notice Deploy the contract and set its initial owner.
     ///
     /// @param owner_ The initial owner of this contract.
-    constructor(address owner_, uint256 maxWithdrawPercent_) {
+    /// @param maxWithdrawDenominator_ The initial maxWithdrawDenominator.
+    constructor(address owner_, uint256 maxWithdrawDenominator_) {
         Ownable._initializeOwner(owner_);
-        _setMaxWithdrawPercent(maxWithdrawPercent_);
+        _setMaxWithdrawDenominator(maxWithdrawDenominator_);
     }
 
     /// @notice Receive function allowing ETH to be deposited in this contract.
@@ -141,7 +140,7 @@ contract MagicSpend is Ownable, IPaymaster {
         validationData = (sigFailed ? 1 : 0) | (uint256(withdrawRequest.expiry) << 160);
 
         // NOTE: Do not include the gas part in withdrawable funds as it will be handled in `postOp()`.
-        _withdrawableETH[userOp.sender] += withdrawAmount - maxCost;
+        _withdrawable[userOp.sender] += withdrawAmount - maxCost;
         context = abi.encode(maxCost, userOp.sender);
     }
 
@@ -151,7 +150,7 @@ contract MagicSpend is Ownable, IPaymaster {
         onlyEntryPoint
     {
         // `PostOpMode.postOpReverted` should never happen.
-        // The flow here can only revert if there are > maxWithdrawPercent
+        // The flow here can only revert if there are > maxWithdrawDenominator
         // withdraws in the same transaction, which should be highly unlikely.
         // If the ETH transfer fails, the entire bundle will revert due an issue in the EntryPoint
         // https://github.com/eth-infinitism/account-abstraction/pull/293
@@ -163,10 +162,10 @@ contract MagicSpend is Ownable, IPaymaster {
 
         // Compute the total remaining funds available for the user accout.
         // NOTE: Take into account the user operation gas that was not consumed.
-        uint256 withdrawable = _withdrawableETH[account] + (maxGasCost - actualGasCost);
+        uint256 withdrawable = _withdrawable[account] + (maxGasCost - actualGasCost);
 
         // Send the all remaining funds to the user accout.
-        delete _withdrawableETH[account];
+        delete _withdrawable[account];
         if (withdrawable > 0) {
             SafeTransferLib.forceSafeTransferETH(account, withdrawable, SafeTransferLib.GAS_STIPEND_NO_STORAGE_WRITES);
         }
@@ -177,11 +176,11 @@ contract MagicSpend is Ownable, IPaymaster {
     /// @dev Can be called back during the `UserOperation` execution to sponsor funds for non-gas related
     ///      use cases (e.g., swap or mint).
     function withdrawGasExcess() external {
-        uint256 amount = _withdrawableETH[msg.sender];
+        uint256 amount = _withdrawable[msg.sender];
         // we could allow 0 value transfers, but prefer to be explicit
         if (amount == 0) revert NoExcess();
 
-        delete _withdrawableETH[msg.sender];
+        delete _withdrawable[msg.sender];
         _withdraw(address(0), msg.sender, amount);
     }
 
@@ -259,13 +258,13 @@ contract MagicSpend is Ownable, IPaymaster {
         IEntryPoint(entryPoint()).withdrawStake(to);
     }
 
-    /// @notice sets maxWithdrawPercent
+    /// @notice Sets maxWithdrawDenominator.
     ///
     /// @dev Reverts if not called by the owner of the contract.
     ///
-    /// @param newPercent The new value for maxWithdrawPercent.
-    function setMaxWithdrawPercent(uint256 newPercent) external onlyOwner {
-        _setMaxWithdrawPercent(newPercent);
+    /// @param newDenominator The new value for maxWithdrawDenominator.
+    function setMaxWithdrawDenominator(uint256 newDenominator) external onlyOwner {
+        _setMaxWithdrawDenominator(newDenominator);
     }
 
     /// @notice Returns whether the `withdrawRequest` signature is valid for the given `account`.
@@ -324,10 +323,10 @@ contract MagicSpend is Ownable, IPaymaster {
         return 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789;
     }
 
-    function _setMaxWithdrawPercent(uint256 newPercent) internal {
-        maxWithdrawPercent = newPercent;
+    function _setMaxWithdrawDenominator(uint256 newDenominator) internal {
+        maxWithdrawDenominator = newDenominator;
 
-        emit MaxWithdrawPercentSet(newPercent);
+        emit MaxWithdrawDenominatorSet(newDenominator);
     }
 
     /// @notice Validate the `withdrawRequest` against the given `account`.
@@ -342,7 +341,7 @@ contract MagicSpend is Ownable, IPaymaster {
             revert InvalidNonce(withdrawRequest.nonce);
         }
 
-        uint256 maxAllowed = address(this).balance / maxWithdrawPercent;
+        uint256 maxAllowed = address(this).balance / maxWithdrawDenominator;
         if (withdrawRequest.asset == address(0) && withdrawRequest.amount > maxAllowed) {
             revert WithdrawTooLarge(withdrawRequest.amount, maxAllowed);
         }

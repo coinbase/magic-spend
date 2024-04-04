@@ -49,10 +49,10 @@ contract ValidatePaymasterUserOpTest is PaymasterMagicSpendBaseTest, ValidateTes
     function test_reverts_whenWithdrawExceedsMaxAllowed(
         uint256 accountBalance,
         uint256 withdraw,
-        uint256 maxWithdrawPercent
+        uint256 MaxWithdrawDenominator
     ) public override {
         maxCost = withdraw;
-        super.test_reverts_whenWithdrawExceedsMaxAllowed(accountBalance, withdraw, maxWithdrawPercent);
+        super.test_reverts_whenWithdrawExceedsMaxAllowed(accountBalance, withdraw, MaxWithdrawDenominator);
     }
 
     function _validateInvokingCall() internal override {
