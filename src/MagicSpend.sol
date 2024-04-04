@@ -34,7 +34,8 @@ contract MagicSpend is Ownable, IPaymaster {
     ///
     /// @dev Only applies to native asset withdraws.
     /// @dev Helps prevent withdraws in the same transaction leading to reverts and hurting paymaster reputation.
-    /// @dev Percent in whole units; 20 = 1/20 = 20%
+    /// @dev Percent expressed in whole units, e.g. 20 means no single withdraw
+    /// can exceed 20% of address.balance
     uint256 public maxWithdrawPercent;
 
     /// @notice Track the ETH available to be withdrawn per user.
@@ -262,9 +263,7 @@ contract MagicSpend is Ownable, IPaymaster {
     ///
     /// @dev Reverts if not called by the owner of the contract.
     ///
-    /// @param newPercent The new value for maxWithdrawPercent
-    /// Percent expressed in whole units, e.g. 20 means no single withdraw
-    /// can exceed 20% of address.balance
+    /// @param newPercent The new value for maxWithdrawPercent.
     function setMaxWithdrawPercent(uint256 newPercent) external onlyOwner {
         _setMaxWithdrawPercent(newPercent);
     }
