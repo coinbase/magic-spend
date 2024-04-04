@@ -30,7 +30,7 @@ contract MagicSpend is Ownable, IPaymaster {
         uint48 expiry;
     }
 
-    /// @notice address.balance divided by maxWithdrawDenominator expresses the max WithdrawRequest.amount
+    /// @notice address(this).balance divided by maxWithdrawDenominator expresses the max WithdrawRequest.amount
     /// allowed for a native asset withdraw.
     ///
     /// @dev Helps prevent withdraws in the same transaction leading to reverts and hurting paymaster reputation.
