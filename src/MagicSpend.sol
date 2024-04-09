@@ -68,7 +68,7 @@ contract MagicSpend is Ownable, IPaymaster {
 
     /// @notice Thrown when trying to replay a withdraw request with the same nonce.
     ///
-    /// @param nonce The nonce being replayed.
+    /// @param nonce The already used nonce.
     error InvalidNonce(uint256 nonce);
 
     /// @notice Thrown during validation in the context of ERC4337, when the withdraw request amount is insufficient
