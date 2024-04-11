@@ -74,6 +74,7 @@ This flow is like "Pay gas only” with the addition of (7.) and (8.). Here, the
 | Network   | Contract Address                        |
 |-----------|-----------------------------------------|
 | Base | [0x011A61C07DbF256A68256B1cB51A5e246730aB92](https://basescan.org/address/0x011A61C07DbF256A68256B1cB51A5e246730aB92) |
+| Base Sepolia | [0x011A61C07DbF256A68256B1cB51A5e246730aB92](https://sepolia.basescan.org/address/0x011a61c07dbf256a68256b1cb51a5e246730ab92) |
 
 
 ## Developing 
