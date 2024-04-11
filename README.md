@@ -1,6 +1,3 @@
-> [!IMPORTANT]  
-> The code in this repository is still under audit. It is not yet recommended for production use.
-
 # Magic Spend
 
 Magic Spend is a contract that allows onchain accounts to present valid Withdraw Requests and receive funds. A Withdraw Request is defined as 
@@ -76,7 +73,7 @@ This flow is like "Pay gas only” with the addition of (7.) and (8.). Here, the
 
 | Network   | Contract Address                        |
 |-----------|-----------------------------------------|
-| Base Sepolia | 0x619CcD22eF045De3b63d3D03224BFF5491cd5D11 |
+| Base | [0x011A61C07DbF256A68256B1cB51A5e246730aB92](https://basescan.org/address/0x011A61C07DbF256A68256B1cB51A5e246730aB92) |
 
 
 ## Developing 
