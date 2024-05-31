@@ -16,7 +16,7 @@ import {IEntryPoint} from "account-abstraction/interfaces/IEntryPoint.sol";
 /// @dev See https://eips.ethereum.org/EIPS/eip-4337#extension-paymasters.
 contract MagicSpend is IPaymaster {
     /// @notice Signed rebalance operation allowing accounts to rebalance credits in this contract.
-    struct RebalanceRequest {
+    struct RebalanceOperation {
         /// @dev The signature associated with this rebalance request.
         bytes signature;
         /// @dev The asset to rebalance.
@@ -46,16 +46,16 @@ contract MagicSpend is IPaymaster {
     uint256 immutable maxWithdrawDenominator = 20;
 
     /// @notice Track the number of staker deposits to the EntryPoint.
-    uint256 internal _stakerDepositCount;
+    uint256 internal _depositCount;
 
     /// @notice Track the staker deposits to the EntryPoint.
-    mapping(address staker => uint256) internal _stakerDeposits;
+    mapping(address staker => uint256) internal _deposits;
 
     /// @notice Track the funds credited to each creditor account.
-    mapping(address creditor => uint256) internal _ETHCredits;
+    mapping(address creditor => uint256) internal _creditsETH;
 
     /// @notice Track the funds credited to each creditor account per asset.
-    mapping(address => mapping(address => uint256)) private _TokenCredits;
+    mapping(address => mapping(address => uint256)) private _creditsERC20;
 
     /// @notice Track the amount of native asset available to be withdrawn per user.
     mapping(address user => uint256 amount) internal _withdrawable;
@@ -144,7 +144,32 @@ contract MagicSpend is IPaymaster {
         onlyEntryPoint
         returns (bytes memory context, uint256 validationData)
     {
-        WithdrawRequest memory withdrawRequest = abi.decode(userOp.paymasterAndData[20:], (WithdrawRequest));
+        (WithdrawRequest memory withdrawRequest, RebalanceOperation[] memory rebalanceOperations) =
+            abi.decode(userOp.paymasterAndData[20:], (WithdrawRequest, RebalanceOperation[]));
+        
+        // Validate each rebalance operation and credit the account(s) with the rebalance amount(s).
+        for (uint256 i = 0; i < rebalanceOperations.length; i++) {
+            RebalanceOperation memory rebalanceOperation = rebalanceOperations[i];
+
+            if (rebalanceOperation.asset != address(0)) {
+                revert UnsupportedPaymasterAsset(rebalanceOperation.asset);
+            }
+
+            if (block.timestamp > withdrawRequest.expiry) {
+                revert Expired();
+            }
+
+            if (!isValidWithdrawSignature(userOp.sender, rebalanceOperation)) {
+                revert InvalidSignature();
+            }
+
+            _validateRequest(userOp.sender, rebalanceOperation);
+
+            // reserve funds for gas, will credit user with difference in post op
+            _withdrawable[userOp.sender] += rebalanceOperation.amount - maxCost;
+        }
+
+
         uint256 withdrawAmount = withdrawRequest.amount;
 
         if (withdrawAmount < maxCost) {
@@ -241,7 +266,7 @@ contract MagicSpend is IPaymaster {
     /// @param amount The amount to deposit on the the Entrypoint.
     function entryPointDeposit(uint256 amount) external payable {
         // Deposit the ETH into the EntryPoint, along with the crediter's address.
-        _credits[msg.sender] += amount;
+        _deposits[msg.sender] += amount;
 
         SafeTransferLib.safeTransferETH(entryPoint(), amount);
     }
@@ -254,7 +279,7 @@ contract MagicSpend is IPaymaster {
     /// @param amount The amount to withdraw from the Entrypoint.
     function entryPointWithdraw(address payable to, uint256 amount) external {
         // Withdraw the ETH from the EntryPoint, along with the crediter's address.
-        _credits[msg.sender] -= amount;
+        _deposits[msg.sender] -= amount;
 
         IEntryPoint(entryPoint()).withdrawTo(to, amount);
     }
@@ -269,8 +294,10 @@ contract MagicSpend is IPaymaster {
     ///                            equal to or greater than the current unstake delay.
     function entryPointAddStake(uint256 amount, uint32 unstakeDelaySeconds) external payable {
         // Adds the deposit to the staker deposits.
-        _stakerDeposits[msg.sender] += amount;
-        _stakerDepositCount++;
+        _deposits[msg.sender] += amount;
+        if (_deposits[msg.sender] == amount) {
+            _stakerDepositCount++;
+        }
 
         IEntryPoint(entryPoint()).addStake{value: amount}(unstakeDelaySeconds);
     }
@@ -295,10 +322,30 @@ contract MagicSpend is IPaymaster {
     /// @param to The beneficiary address.
     function entryPointWithdrawStake(address payable to) external {
         // Subtracts the withdrawal from the staker deposits.
-        _stakerDeposits[msg.sender] -= amount;
-        _stakerDepositCount--;
+        _deposits[msg.sender] -= amount;
+        if (_deposits[msg.sender] == 0) {
+            _stakerDepositCount--;
+        }
 
         IEntryPoint(entryPoint()).withdrawStake(to);
+    }
+
+    /// @notice Returns whether the `rebalanceOperation` signature is valid for the given `account`.
+    ///
+    /// @dev Does not validate nonce or expiry.
+    ///
+    /// @param account            The account address.
+    /// @param rebalanceOperation The rebalance operation.
+    ///
+    /// @return `true` if the signature is valid, else `false`.
+    function isValidRebalanceSignature(address account, RebalanceOperation memory rebalanceOperation)
+        public
+        view
+        returns (bool)
+    {
+        return SignatureCheckerLib.isValidSignatureNow(
+            owner(), getHash(account, rebalanceOperation), rebalanceOperation.signature
+        );
     }
 
     /// @notice Returns whether the `withdrawRequest` signature is valid for the given `account`.
@@ -316,6 +363,27 @@ contract MagicSpend is IPaymaster {
     {
         return SignatureCheckerLib.isValidSignatureNow(
             owner(), getHash(account, withdrawRequest), withdrawRequest.signature
+        );
+    }
+
+    /// @notice Returns the hash to be signed for a given `account` and `rebalanceOperation` pair.
+    ///
+    /// @dev Returns an EIP-191 compliant Ethereum Signed Message (version 0x45), see
+    ///      https://eips.ethereum.org/EIPS/eip-191.
+    ///
+    /// @param account            The account address.
+    /// @param rebalanceOperation The rebalance operation.
+    ///
+    /// @return The hash to be signed for the given `account` and `rebalanceOperation`.
+    function getHash(address account, RebalanceOperation memory rebalanceOperation) public view returns (bytes32) {
+        return SignatureCheckerLib.toEthSignedMessageHash(
+            abi.encode(
+                address(this),
+                account,
+                block.chainid,
+                rebalanceOperation.asset,
+                rebalanceOperation.amount
+            )
         );
     }
 
@@ -355,6 +423,24 @@ contract MagicSpend is IPaymaster {
     /// @notice Returns the canonical ERC-4337 EntryPoint v0.6 contract.
     function entryPoint() public pure returns (address) {
         return 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789;
+    }
+
+    /// @notive Validates the `rebalanceOperation` against the given `account`.
+    ///
+    /// @dev Runs all non-signature validation checks.
+    /// @dev Reverts if the rebalance operation nonce has already been used.
+    ///
+    /// @param account            The account address.
+    /// @param rebalanceOperation The rebalance operation to validate.
+    function _validateRequest(address account, RebalanceOperation memory rebalanceOperation) internal {
+        if (_nonceUsed[rebalanceOperation.nonce][account]) {
+            revert InvalidNonce(rebalanceOperation.nonce);
+        }
+
+        _nonceUsed[rebalanceOperation.nonce][account] = true;
+
+        // This is emitted ahead of fund transfer, but allows a consolidated code path
+        emit MagicSpendWithdrawal(account, rebalanceOperation.asset, rebalanceOperation.amount, rebalanceOperation.nonce);
     }
 
     /// @notice Validate the `withdrawRequest` against the given `account`.
