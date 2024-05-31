@@ -1,7 +1,6 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.23;
 
-import {Ownable} from "solady/src/auth/Ownable.sol";
 import {SignatureCheckerLib} from "solady/src/utils/SignatureCheckerLib.sol";
 import {SafeTransferLib} from "solady/src/utils/SafeTransferLib.sol";
 import {UserOperation} from "account-abstraction/interfaces/UserOperation.sol";
@@ -15,7 +14,17 @@ import {IEntryPoint} from "account-abstraction/interfaces/IEntryPoint.sol";
 /// @notice ERC4337 Paymaster implementation compatible with Entrypoint v0.6.
 ///
 /// @dev See https://eips.ethereum.org/EIPS/eip-4337#extension-paymasters.
-contract MagicSpend is Ownable, IPaymaster {
+contract MagicSpend is IPaymaster {
+    /// @notice Signed rebalance operation allowing accounts to rebalance credits in this contract.
+    struct RebalanceRequest {
+        /// @dev The signature associated with this rebalance request.
+        bytes signature;
+        /// @dev The asset to rebalance.
+        address asset;
+        /// @dev The requested amount to rebalance.
+        uint256 amount;
+    }
+
     /// @notice Signed withdraw request allowing accounts to withdraw funds from this contract.
     struct WithdrawRequest {
         /// @dev The signature associated with this withdraw request.
@@ -34,7 +43,19 @@ contract MagicSpend is Ownable, IPaymaster {
     /// allowed for a native asset withdraw.
     ///
     /// @dev Helps prevent withdraws in the same transaction leading to reverts and hurting paymaster reputation.
-    uint256 public maxWithdrawDenominator;
+    uint256 immutable maxWithdrawDenominator = 20;
+
+    /// @notice Track the number of staker deposits to the EntryPoint.
+    uint256 internal _stakerDepositCount;
+
+    /// @notice Track the staker deposits to the EntryPoint.
+    mapping(address staker => uint256) internal _stakerDeposits;
+
+    /// @notice Track the funds credited to each creditor account.
+    mapping(address creditor => uint256) internal _ETHCredits;
+
+    /// @notice Track the funds credited to each creditor account per asset.
+    mapping(address => mapping(address => uint256)) private _TokenCredits;
 
     /// @notice Track the amount of native asset available to be withdrawn per user.
     mapping(address user => uint256 amount) internal _withdrawable;
@@ -53,7 +74,7 @@ contract MagicSpend is Ownable, IPaymaster {
     /// @notice Emitted when the `maxWithdrawDenominator` is set.
     ///
     /// @param newDenominator The new maxWithdrawDenominator value.
-    event MaxWithdrawDenominatorSet(uint256 newDenominator);
+    // event MaxWithdrawDenominatorSet(uint256 newDenominator);
 
     /// @notice Thrown when the withdraw request signature is invalid.
     ///
@@ -62,6 +83,9 @@ contract MagicSpend is Ownable, IPaymaster {
     ///         - performed over the content specified in `getHash()`
     ///         - signed by the current owner of this contract
     error InvalidSignature();
+
+    /// @notice Thrown when the staked deposit count is not zero.
+    error StakedDepositCountNotZero();
 
     /// @notice Thrown when trying to use a withdraw request after its expiry has been reached.
     error Expired();
@@ -109,10 +133,7 @@ contract MagicSpend is Ownable, IPaymaster {
     ///
     /// @param owner_ The initial owner of this contract.
     /// @param maxWithdrawDenominator_ The initial maxWithdrawDenominator.
-    constructor(address owner_, uint256 maxWithdrawDenominator_) {
-        Ownable._initializeOwner(owner_);
-        _setMaxWithdrawDenominator(maxWithdrawDenominator_);
-    }
+    constructor() {}
 
     /// @notice Receive function allowing ETH to be deposited in this contract.
     receive() external payable {}
@@ -160,11 +181,11 @@ contract MagicSpend is Ownable, IPaymaster {
 
         (uint256 maxGasCost, address account) = abi.decode(context, (uint256, address));
 
-        // Compute the total remaining funds available for the user accout.
+        // Compute the total remaining funds available for the user account.
         // NOTE: Take into account the user operation gas that was not consumed.
         uint256 withdrawable = _withdrawable[account] + (maxGasCost - actualGasCost);
 
-        // Send the all remaining funds to the user accout.
+        // Send the all remaining funds to the user account.
         delete _withdrawable[account];
         if (withdrawable > 0) {
             SafeTransferLib.forceSafeTransferETH(account, withdrawable, SafeTransferLib.GAS_STIPEND_NO_STORAGE_WRITES);
@@ -209,7 +230,7 @@ contract MagicSpend is Ownable, IPaymaster {
     /// @param asset  The asset to withdraw.
     /// @param to     The beneficiary address.
     /// @param amount The amount to withdraw.
-    function ownerWithdraw(address asset, address to, uint256 amount) external onlyOwner {
+    function ownerWithdraw(address asset, address to, uint256 amount) external {
         _withdraw(asset, to, amount);
     }
 
@@ -218,7 +239,10 @@ contract MagicSpend is Ownable, IPaymaster {
     /// @dev Reverts if not called by the owner of the contract.
     ///
     /// @param amount The amount to deposit on the the Entrypoint.
-    function entryPointDeposit(uint256 amount) external payable onlyOwner {
+    function entryPointDeposit(uint256 amount) external payable {
+        // Deposit the ETH into the EntryPoint, along with the crediter's address.
+        _credits[msg.sender] += amount;
+
         SafeTransferLib.safeTransferETH(entryPoint(), amount);
     }
 
@@ -228,7 +252,10 @@ contract MagicSpend is Ownable, IPaymaster {
     ///
     /// @param to     The beneficiary address.
     /// @param amount The amount to withdraw from the Entrypoint.
-    function entryPointWithdraw(address payable to, uint256 amount) external onlyOwner {
+    function entryPointWithdraw(address payable to, uint256 amount) external {
+        // Withdraw the ETH from the EntryPoint, along with the crediter's address.
+        _credits[msg.sender] -= amount;
+
         IEntryPoint(entryPoint()).withdrawTo(to, amount);
     }
 
@@ -240,14 +267,23 @@ contract MagicSpend is Ownable, IPaymaster {
     /// @param amount              The amount to stake in the Entrypoint.
     /// @param unstakeDelaySeconds The duration for which the stake cannot be withdrawn. Must be
     ///                            equal to or greater than the current unstake delay.
-    function entryPointAddStake(uint256 amount, uint32 unstakeDelaySeconds) external payable onlyOwner {
+    function entryPointAddStake(uint256 amount, uint32 unstakeDelaySeconds) external payable {
+        // Adds the deposit to the staker deposits.
+        _stakerDeposits[msg.sender] += amount;
+        _stakerDepositCount++;
+
         IEntryPoint(entryPoint()).addStake{value: amount}(unstakeDelaySeconds);
     }
 
     /// @notice Unlocks stake in the EntryPoint.
     ///
     /// @dev Reverts if not called by the owner of the contract.
-    function entryPointUnlockStake() external onlyOwner {
+    function entryPointUnlockStake() external {
+        // Throws if the staker deposit count is not zero.
+        if (_stakerDepositCount > 0) {
+            revert StakedDepositCountNotZero();
+        }
+
         IEntryPoint(entryPoint()).unlockStake();
     }
 
@@ -257,17 +293,12 @@ contract MagicSpend is Ownable, IPaymaster {
     ///      has passed since the last `entryPointUnlockStake` call.
     ///
     /// @param to The beneficiary address.
-    function entryPointWithdrawStake(address payable to) external onlyOwner {
-        IEntryPoint(entryPoint()).withdrawStake(to);
-    }
+    function entryPointWithdrawStake(address payable to) external {
+        // Subtracts the withdrawal from the staker deposits.
+        _stakerDeposits[msg.sender] -= amount;
+        _stakerDepositCount--;
 
-    /// @notice Sets maxWithdrawDenominator.
-    ///
-    /// @dev Reverts if not called by the owner of the contract.
-    ///
-    /// @param newDenominator The new value for maxWithdrawDenominator.
-    function setMaxWithdrawDenominator(uint256 newDenominator) external onlyOwner {
-        _setMaxWithdrawDenominator(newDenominator);
+        IEntryPoint(entryPoint()).withdrawStake(to);
     }
 
     /// @notice Returns whether the `withdrawRequest` signature is valid for the given `account`.
@@ -324,12 +355,6 @@ contract MagicSpend is Ownable, IPaymaster {
     /// @notice Returns the canonical ERC-4337 EntryPoint v0.6 contract.
     function entryPoint() public pure returns (address) {
         return 0x5FF137D4b0FDCD49DcA30c7CF57E578a026d2789;
-    }
-
-    function _setMaxWithdrawDenominator(uint256 newDenominator) internal {
-        maxWithdrawDenominator = newDenominator;
-
-        emit MaxWithdrawDenominatorSet(newDenominator);
     }
 
     /// @notice Validate the `withdrawRequest` against the given `account`.
