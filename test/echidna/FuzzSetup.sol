@@ -5,7 +5,7 @@ import "fuzzlib/FuzzBase.sol";
 import "fuzzlib/IHevm.sol";
 
 import {UserOperation} from "account-abstraction/interfaces/UserOperation.sol";
-import {SignatureCheckerLib} from "solady/src/utils/SignatureCheckerLib.sol";
+import {SignatureCheckerLib} from "solady/utils/SignatureCheckerLib.sol";
 
 import {MagicSpend} from "../../src/MagicSpend.sol";
 

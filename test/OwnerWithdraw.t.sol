@@ -3,7 +3,7 @@ pragma solidity >=0.8.21;
 
 import {Ownable} from "./MagicSpend.t.sol";
 import {MagicSpendTest} from "./MagicSpend.t.sol";
-import {MockERC20} from "solady/test/utils/mocks/MockERC20.sol";
+import {MockERC20} from "solady/../test/utils/mocks/MockERC20.sol";
 
 contract OwnerWithdrawTest is MagicSpendTest {
     MockERC20 token = new MockERC20("test", "TEST", 18);

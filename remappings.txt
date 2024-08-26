@@ -1,0 +1,12 @@
+solady/=lib/solady/src/
+@openzeppelin/contracts/security/=lib/openzeppelin-contracts/contracts/utils/
+FreshCryptoLib/=lib/smart-wallet/lib/FreshCryptoLib/solidity/src/
+account-abstraction/=lib/account-abstraction/contracts/
+ds-test/=lib/forge-std/lib/ds-test/src/
+erc4626-tests/=lib/openzeppelin-contracts/lib/erc4626-tests/
+forge-std/=lib/forge-std/src/
+fuzzlib/=lib/fuzzlib/src/
+openzeppelin-contracts/=lib/openzeppelin-contracts/
+p256-verifier/=lib/smart-wallet/lib/p256-verifier/
+smart-wallet/=lib/smart-wallet/
+webauthn-sol/=lib/smart-wallet/lib/webauthn-sol/src/

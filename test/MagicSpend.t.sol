@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.21;
 
-import {SignatureCheckerLib} from "solady/src/utils/SignatureCheckerLib.sol";
+import {SignatureCheckerLib} from "solady/utils/SignatureCheckerLib.sol";
 import {Test, console2} from "forge-std/Test.sol";
 import {Strings} from "openzeppelin-contracts/contracts/utils/Strings.sol";
 import "../src/MagicSpend.sol";

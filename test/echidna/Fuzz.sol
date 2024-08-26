@@ -3,7 +3,7 @@ pragma solidity ^0.8.0;
 
 import "./FuzzSetup.sol";
 
-import {SafeTransferLib} from "solady/src/utils/SafeTransferLib.sol";
+import {SafeTransferLib} from "solady/utils/SafeTransferLib.sol";
 import {IPaymaster} from "account-abstraction/interfaces/IPaymaster.sol";
 
 contract Fuzz is FuzzSetup {

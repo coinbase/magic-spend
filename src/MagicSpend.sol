@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: MIT
 pragma solidity 0.8.23;
 
-import {Ownable} from "solady/src/auth/Ownable.sol";
-import {SignatureCheckerLib} from "solady/src/utils/SignatureCheckerLib.sol";
-import {SafeTransferLib} from "solady/src/utils/SafeTransferLib.sol";
+import {Ownable} from "solady/auth/Ownable.sol";
+import {SignatureCheckerLib} from "solady/utils/SignatureCheckerLib.sol";
+import {SafeTransferLib} from "solady/utils/SafeTransferLib.sol";
 import {UserOperation} from "account-abstraction/interfaces/UserOperation.sol";
 import {IPaymaster} from "account-abstraction/interfaces/IPaymaster.sol";
 import {IEntryPoint} from "account-abstraction/interfaces/IEntryPoint.sol";

@@ -3,8 +3,8 @@ pragma solidity >=0.8.21;
 
 import {MagicSpendTest} from "./MagicSpend.t.sol";
 import {MagicSpend} from "../src/MagicSpend.sol";
-import {MockERC20} from "solady/test/utils/mocks/MockERC20.sol";
-import {SignatureCheckerLib} from "solady/src/utils/SignatureCheckerLib.sol";
+import {MockERC20} from "solady/../test/utils/mocks/MockERC20.sol";
+import {SignatureCheckerLib} from "solady/utils/SignatureCheckerLib.sol";
 
 contract GetHashTest is MagicSpendTest {
     MockERC20 token = new MockERC20("test", "TEST", 18);

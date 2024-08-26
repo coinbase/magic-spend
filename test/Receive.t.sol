@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: MIT
 pragma solidity >=0.8.21;
 
-import {MockERC20} from "solady/test/utils/mocks/MockERC20.sol";
+import {MockERC20} from "solady/../test/utils/mocks/MockERC20.sol";
 
 import "./MagicSpend.t.sol";
 
