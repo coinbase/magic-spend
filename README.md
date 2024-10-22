@@ -1,6 +1,6 @@
-# Magic Spend
+# MagicSpend
 
-Magic Spend is a contract that allows onchain accounts to present valid Withdraw Requests and receive funds. A Withdraw Request is defined as 
+MagicSpend is a contract that allows onchain accounts to present valid Withdraw Requests and receive funds. A Withdraw Request is defined as 
 
 ```solidity
 struct WithdrawRequest {
@@ -15,7 +15,7 @@ struct WithdrawRequest {
 Where signature is an [EIP-191](https://eips.ethereum.org/EIPS/eip-191) compliant signature of the message 
 ```solidity
 abi.encode(
-  <Magic Spend contract address>,
+  <MagicSpend contract address>,
   <UserOperation.sender and/or msg.sender of the withdraw call>,
   <chain ID>,
   withdrawRequest.asset,
